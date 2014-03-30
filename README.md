@@ -2,8 +2,8 @@
 
 Throttles the throughput of function calls and `core.async` channels.
 
-Uses the [token bucket algorithm][1] to support controlling the overall rate as
-well as the maximum burst rate.
+Uses the [token bucket algorithm][1] to control both the overall rate as
+well as the burst rate.
 
 ## Get it
 
