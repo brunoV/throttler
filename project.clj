@@ -1,5 +1,5 @@
 (defproject throttler "0.1.0"
-  :description "Control the rate of message passing and function invocations"
+  :description "Control the throughput of function calls and core.async channels using the token bucket algorithm"
   :url "http://example.com/FIXME"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
