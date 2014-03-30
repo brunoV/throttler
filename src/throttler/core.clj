@@ -25,7 +25,6 @@
         c' (chan)                                    ; the throttled output channel
         bucket (chan (dropping-buffer bucket-size))] ; we model the bucket with a buffered channel
 
-
     ;; The piping thread. Takes a token from the bucket (blocking until
     ;; one is ready if the bucket is empty), and forwards token-value
     ;; messages from the source channel to the output channel.
@@ -47,9 +46,7 @@
 
     (go
      (while true
-       ;(println  "filler: about to insert a token")
        (>! bucket :token)
-       ;(println "filler: token inserted. sleeping...")
        (<! (timeout (int sleep-time)))))
 
     c'))
