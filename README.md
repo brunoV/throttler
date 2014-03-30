@@ -10,13 +10,13 @@ well as the burst rate.
 ### Leiningen
 
 ```clj
-[throttler "0.1.0"]
+[throttler "0.1.1"]
 ```
 
 ### Gradle
 
 ```scala
-compile "throttler:throttler:0.1.0"
+compile "throttler:throttler:0.1.1"
 ```
 
 ## Throttling functions
