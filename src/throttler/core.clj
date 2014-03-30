@@ -114,10 +114,3 @@
          (>!! in :eval-request)
          (<!! out)
          (apply f args)))))
-
-(defn test-speed [in out n]
-  (time
-    (loop [i n]
-      (>!! in :value)
-      (<!! out)
-      (when (pos? i) (recur (dec i))))))
