@@ -101,7 +101,7 @@
   ([f avg-rate burst-rate unit]
 
      "As above, but allowing temporary burst rates of up to
-      'burst-rate'. See throttle-chan for an illustratoin of average and
+      'burst-rate'. See throttle-chan for an illustration of average and
       burst rates."
 
     (let [in (chan 1)
