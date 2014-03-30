@@ -100,14 +100,15 @@ throttled at different rates.
 ```
 Goal rate              Observed rate (mean)  Lower quantile (2.5%)  Upper quantile (95.5%)
 ---------------------  --------------------  ---------------------  ---------------------
-      1  msg/s              1.071 msgs/s          1.056 msgs/s            1.126 msgs/s
-     10 msgs/s             10.10  msgs/s         10.08  msgs/s           10.16  msgs/s
-    100 msgs/s             91.6   msgs/s         90.49  msgs/s           93.93  msgs/s
-  1,000 msgs/s            892.2   msgs/s        886.0   msgs/s          907.5   msgs/s
- 10,000 msgs/s          8,939     msgs/s      8,819     msgs/s        9,062     msgs/s
- 30,000 msgs/s         26,571     msgs/s     25,970     msgs/s       27,184     msgs/s
-100,000 msgs/s         49,958     msgs/s     47,602     msgs/s       50,981     msgs/s
-∞ msgs/s (raw pipe)    48,657     msgs/s     47,663     msgs/s       49,550     msgs/s
+      0.1  msg/s           0.1010 msgs/s          0.1008 msgs/s          0.1016 msgs/s
+      1    msg/s           1.071  msgs/s          1.056  msgs/s          1.126  msgs/s
+     10    msgs/s          10.77  msgs/s         10.67   msgs/s         11.33   msgs/s
+    100    msgs/s          91.6   msgs/s         90.49   msgs/s         93.93   msgs/s
+  1,000    msgs/s         892.2   msgs/s        886.0    msgs/s        907.5    msgs/s
+ 10,000    msgs/s       8,939     msgs/s      8,819      msgs/s      9,062      msgs/s
+ 30,000    msgs/s      26,571     msgs/s     25,970      msgs/s     27,184      msgs/s
+100,000    msgs/s      49,958     msgs/s     47,602      msgs/s     50,981      msgs/s
+∞ msgs/s (raw pipe)    48,657     msgs/s     47,663      msgs/s     49,550      msgs/s
 ```
 
 The error stays below and at about 10% until we get close to the theoretical
