@@ -81,9 +81,11 @@
       Will transmit 1 message/second on average but can transmit up to
       10 messages on a single second."
 
-     (when (nil? (unit->ms unit)) (throw "Invalid unit"))
+     (when (nil? (unit->ms unit))
+       (throw (IllegalArgumentException.
+               (str "Invalid unit. Available units are: " (keys unit->ms)))))
      (when (< burst-rate avg-rate)
-       (throw "burst-rate may not be smaller than avg-rate"))
+       (throw (IllegalArgumentException.) "burst-rate may not be smaller than avg-rate"))
 
      (let [avg-rate-ms (/ avg-rate (unit->ms unit))
            bucket-size (max (- burst-rate avg-rate) 1)]

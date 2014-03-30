@@ -19,7 +19,11 @@
 
       (fact "It runs at approximately the desired rate"
         (rate (fn [] (+?  1 1)) 10) => (roughly 10 2)
-        (rate (fn [] (+?? 1 1)) 10) => (roughly 10 2))))
+        (rate (fn [] (+?? 1 1)) 10) => (roughly 10 2))
+
+      (fact "It fails graciously with the wrong unit"
+        (throttle-fn + 1 :millenium) =>
+          (throws IllegalArgumentException #":second" #":hour"))))
 
 (facts "about throttle-chan"
   (fact "avg-rate <= burst-rate"
