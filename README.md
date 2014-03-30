@@ -84,6 +84,9 @@ get `nil`, which means the input channel was closed.
 (time (while (not (nil? (<!! slow-chan))))) ; "Elapsed time: 5686.198 msecs" (0.9 msg/millisecond)
 ```
 
+So it took 5.6 seconds to read 5000 messages, resulting in a rate of ~ 0.9
+messages/millisecond.
+
 ## Throughput accuracy over a wide range of rates
 
 While motivated by throttling to about 1-1000 messages/second, Throttler is
