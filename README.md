@@ -110,6 +110,9 @@ Goal rate              Observed rate (mean)  Lower quantile (2.5%)  Upper quanti
 The error stays below and at about 10% until we get close to the theoretical
 maximum, which is the speed at which we can pipe messages through channels.
 
+Same numbers apply to `throttle-fn`, as the implementation uses `throttle-chan`
+under the hood.
+
 [1]: http://en.wikipedia.org/wiki/Token_bucket
 [2]: https://github.com/hugoduncan/criterium
 
