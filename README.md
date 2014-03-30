@@ -1,9 +1,23 @@
 # Throttler
 
-Throttles the throughput of function calls and `core.async` channels
+Throttles the throughput of function calls and `core.async` channels.
 
 Uses the [token bucket algorithm][1] to support controlling the overall rate as
 well as the maximum burst rate.
+
+## Get it
+
+### Leiningen
+
+```clj
+[throttler "0.1.0"]
+```
+
+### Gradle
+
+```scala
+compile "throttler:throttler:0.1.0"
+```
 
 ## Usage
 
