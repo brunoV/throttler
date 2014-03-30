@@ -1,6 +1,6 @@
 (defproject throttler "0.1.0"
   :description "Control the throughput of function calls and core.async channels using the token bucket algorithm"
-  :url "http://example.com/FIXME"
+  :url "https://github.com/brunoV/throttler"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure "1.5.1"]
