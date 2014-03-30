@@ -19,7 +19,7 @@ well as the maximum burst rate.
 compile "throttler:throttler:0.1.0"
 ```
 
-## Usage
+## Throttling functions
 
 Import `throttler.core`:
 
@@ -54,9 +54,9 @@ Let's create a bursty multiply with an average rate of 100 calls/s and a burst r
 (time (dotimes [_ 10000] (*# 2 3))) ; "Elapsed time: 105041.395 msecs" (95/second)
 ```
 
-## Throttled channels
+## Throttling channels
 
-For channels, simply switch `throttle-fn` with `throttle-chan`. It takes an
+For channels, simply swap `throttle-fn` with `throttle-chan`. It takes an
 input channel that should be written to, and returns a throttled output channel
 that should be read from:
 
@@ -73,7 +73,7 @@ controlled rate.
 
 Here, we spin up a go thread that writes 5,000 messages to the `in` channel and
 then closes it. On the main thread, we read from the throttled channel until we
-get `nil`, which means the input thread was closed.
+get `nil`, which means the input channel was closed.
 
 ```clj
 (go
@@ -84,18 +84,18 @@ get `nil`, which means the input thread was closed.
 (time (while (not (nil? (<!! slow-chan))))) ; "Elapsed time: 5686.198 msecs" (0.9 msg/millisecond)
 ```
 
-## Throughput accuracy over a wide range of orders of magnitude
+## Throughput accuracy over a wide range of rates
 
-While motivated for throttling at about 1-1000 messages/second, Throttler is
+While motivated by throttling to about 1-1000 messages/second, Throttler is
 reasonably accurate over a wide range of rates. High rates are accurate with an
-error margin of ~10% until we reach the core.async's maximum possible pipe
+error margin of ~10% until we reach core.async's maximum possible pipe
 throughput. On my laptop, this happens at about 50,000 messages/second.
 
 Here's the result of running some [Criterium][2] benchmarks on channels
 throttled at different rates.
 
 ```
-Goal rate              Observed rate (mean)  lower quantile (2.5%)  upper quantile (95.5%)
+Goal rate              Observed rate (mean)  Lower quantile (2.5%)  Upper quantile (95.5%)
 ---------------------  --------------------  ---------------------  ---------------------
       1  msg/s              1.071 msgs/s          1.056 msgs/s            1.126 msgs/s
      10 msgs/s             10.10  msgs/s         10.08  msgs/s           10.16  msgs/s
@@ -107,9 +107,8 @@ Goal rate              Observed rate (mean)  lower quantile (2.5%)  upper quanti
 ∞ msgs/s (raw pipe)    48,657     msgs/s     47,663     msgs/s       49,550     msgs/s
 ```
 
-It can be seen that the error stays below and at about 10% until we get close
-to the theoretical maximum, which is the speed at which we can pipe messages
-through channels.
+The error stays below and at about 10% until we get close to the theoretical
+maximum, which is the speed at which we can pipe messages through channels.
 
 [1]: http://en.wikipedia.org/wiki/Token_bucket
 [2]: https://github.com/hugoduncan/criterium
