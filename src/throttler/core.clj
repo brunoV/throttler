@@ -7,7 +7,7 @@
 (def min-sleep-time 10)
 
 (def unit->ms
-  {:microsecond 0.1 :millisecond 1
+  {:microsecond 0.001 :millisecond 1
    :second 1000 :minute 60000
    :hour 3600000 :day 86400000})
 

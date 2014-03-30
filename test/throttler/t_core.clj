@@ -5,7 +5,9 @@
             [throttler.bench :refer [rate]]))
 
 (facts "about throttle-fn"
-  (let [+? (throttle-fn + 10 :second)]
+  (let [+?  (throttle-fn + 10       :second)
+        +?? (throttle-fn + 0.00001  :microsecond)] ; same, but expressed differently
+
     (fact "It returns something"
       (throttle-fn + 1 :second) => truthy
       (throttle-fn + 1 10 :second) => truthy)
@@ -16,7 +18,8 @@
         (+? 1 1 1.2) => (+ 1 1 1.2))
 
       (fact "It runs at approximately the desired rate"
-        (rate (fn [] (+? 1 1)) 10) => (roughly 10 2))))
+        (rate (fn [] (+?  1 1)) 10) => (roughly 10 2)
+        (rate (fn [] (+?? 1 1)) 10) => (roughly 10 2))))
 
 (facts "about throttle-chan"
   (fact "avg-rate <= burst-rate"
