@@ -20,7 +20,7 @@
       (>!! to v))))
 
 (defn- throttle-chan* [c rate-ms bucket-size]
-  (let [sleep-time (round (max (/ rate-ms) 10))
+  (let [sleep-time (round (max (/ rate-ms) min-sleep-time))
         token-value (round (* sleep-time rate-ms))   ; how many messages to pipe per token
         c' (chan)                                    ; the throttled output channel
         bucket (chan (dropping-buffer bucket-size))] ; we model the bucket with a buffered channel
