@@ -1,4 +1,4 @@
-(defproject throttler "0.1.3"
+(defproject throttler "0.1.4"
   :description "Control the throughput of function calls and core.async channels using the token bucket algorithm"
   :url "https://github.com/brunoV/throttler"
   :license {:name "Eclipse Public License"
