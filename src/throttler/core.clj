@@ -95,23 +95,27 @@
 (defn fn-throttler
   ([rate unit]
 
-     "Creates a throttling function. The produced function accepts a
-     function and produces an equivalent function that complies with the
+     "Creates a throttling function. The returned function accepts a
+     function and produces an equivalent one that complies with the
      desired rate. The same function throttler returned here can be used
      to create throttled versions of many functions. In that case, all
      invocations from the returned functions will sum up to the goal
      average rate.
 
      Example:
+         ; create the function throttler
          (def slow-to-1-per-minute (fn-throttler 1 :minute)
 
-         (f1-slow (slow-to-1-per-minute f1)
-         (f2-slow (slow-to-1-per-minute f2)
-         (f3-slow (slow-to-1-per-minute f3)
+         ; create slow versions of f1, f2 and f3
+         (def f1-slow (slow-to-1-per-minute f1)
+         (def f2-slow (slow-to-1-per-minute f2)
+         (def f3-slow (slow-to-1-per-minute f3)
 
-         (f1-slow arg1 arg2) ; => result
-         (f2-slow) ; => result
-         (f3-slow arg) ; => result
+         ; use them to do work. Their aggregate rate will be equal to 1
+         ; call/minute
+         (f1-slow arg1 arg2) ; => result, t = 0
+         (f2-slow)           ; => result, t = 1 minute
+         (f3-slow arg)       ; => result, t = 2 minutes
 
      The combined rate of f1-slow, f2-slow and f3-slow will be equal to
      'rate'. This does not mean that the rate of each is 1/3rd of
@@ -140,9 +144,7 @@
        ;; all functions will be at most the argument rate).
 
        (fn [f]
-
          (fn [& args]
-
             ;; The approach is simple: pipe a bogus message through a
             ;; throttled channel before evaluating the original function.
 
