@@ -1,6 +1,7 @@
 (ns throttler.core
   (:require [clojure.core.async :as async :refer [chan <!! >!! >! <! timeout go close! dropping-buffer]]
-            [clojure.math.numeric-tower :as math :refer [round]]))
+            [clojure.math.numeric-tower :as math :refer [round]]
+            [clojure.pprint :refer [pprint]]))
 
 ;; To keep the throttler precise even for high frequencies, we set up a
 ;; minimum sleep time.
@@ -91,6 +92,64 @@
            bucket-size (max (- burst-rate avg-rate) 1)]
        (throttle-chan* c avg-rate-ms bucket-size))))
 
+(defn fn-throttler
+  ([rate unit]
+
+     "Creates a throttling function. The produced function accepts a
+     function and produces an equivalent function that complies with the
+     desired rate. The same function throttler returned here can be used
+     to create throttled versions of many functions. In that case, all
+     invocations from the returned functions will sum up to the goal
+     average rate.
+
+     Example:
+         (def slow-to-1-per-minute (fn-throttler 1 :minute)
+
+         (f1-slow (slow-to-1-per-minute f1)
+         (f2-slow (slow-to-1-per-minute f2)
+         (f3-slow (slow-to-1-per-minute f3)
+
+         (f1-slow arg1 arg2) ; => result
+         (f2-slow) ; => result
+         (f3-slow arg) ; => result
+
+     The combined rate of f1-slow, f2-slow and f3-slow will be equal to
+     'rate'. This does not mean that the rate of each is 1/3rd of
+     'rate'; if only f1-slow is being called then its throughput will be
+     close to rate. Or, if one of the functions is being called from
+     multiple threads then it'll get a greater share of the total
+     bandwith. In other words, the functions will use statistical
+     multiplexing to cap the allotted bandwidth."
+
+     (fn-throttler rate rate unit))
+
+  ([avg-rate burst-rate unit]
+
+     "Same as above, but with separate overall rates and burst rates. As
+      before, both rates are shared among all functions that the throttling
+      function produces."
+
+     (let [in (chan 1)
+           out (throttle-chan in avg-rate burst-rate unit)]
+
+       ;; This function takes a function and produces a throttled
+       ;; function. When called multiple times, all the resulting
+       ;; throttled functions will share the same throttled
+       ;; channel. Their invocations will be funneled together,
+       ;; resulting in a globally shared rate. (the sum af the rates of
+       ;; all functions will be at most the argument rate).
+
+       (fn [f]
+
+         (fn [& args]
+
+            ;; The approach is simple: pipe a bogus message through a
+            ;; throttled channel before evaluating the original function.
+
+           (>!! in :eval-request)
+           (<!! out)
+           (apply f args))))))
+
 (defn throttle-fn
   ([f rate unit]
 
@@ -106,13 +165,4 @@
       'burst-rate'. See throttle-chan for an illustration of average and
       burst rates."
 
-    (let [in (chan 1)
-          out (throttle-chan in avg-rate burst-rate unit)]
-       (fn [& args]
-
-         ;; The approach is simple: pipe a bogus message through a
-         ;; throttled channel before evaluating the provided function.
-
-         (>!! in :eval-request)
-         (<!! out)
-         (apply f args)))))
+     ((fn-throttler avg-rate burst-rate unit) f)))
