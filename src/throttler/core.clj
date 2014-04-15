@@ -1,11 +1,12 @@
 (ns throttler.core
   (:require [clojure.core.async :as async :refer [chan <!! >!! >! <! timeout go close! dropping-buffer]]
-            [clojure.math.numeric-tower :as math :refer [round]]
             [clojure.pprint :refer [pprint]]))
 
 ;; To keep the throttler precise even for high frequencies, we set up a
 ;; minimum sleep time.
 (def min-sleep-time 10)
+
+(defn round [n] (Math/round (double n)))
 
 (def unit->ms
   {:microsecond 0.001 :millisecond 1
