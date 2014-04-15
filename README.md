@@ -50,7 +50,7 @@ Let's create a bursty multiply with an average rate of 100 calls/s and a burst r
 ; First 1000 calls go through unthrottled, the 1001th needs to wait for about a second
 (time (dotimes [_ 1001] (*# 2 3))) ; "Elapsed time: 1125.117 msecs" (889/second)
 
-; Over a larg-ish number of invocations, the average rate is close to the goal
+; Over a large-ish number of invocations, the average rate is close to the goal
 (time (dotimes [_ 10000] (*# 2 3))) ; "Elapsed time: 105041.395 msecs" (95/second)
 ```
 
