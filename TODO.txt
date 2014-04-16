@@ -1,3 +1,0 @@
-* Write tests for fn-throttler
-* Add fn-throttler explanation to README.md
-* Can we do the channel version of fn-throttler?

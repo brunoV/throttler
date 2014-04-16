@@ -1,3 +1,6 @@
+src/
+test/
+*.clj
 *.jar
 *.war
 *jar
