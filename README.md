@@ -1,6 +1,6 @@
 # Throttler
 
-Throttles the throughput of function calls and `core.async` channels.
+Throttle the throughput of function calls and `core.async` channels.
 
 Uses the [token bucket algorithm][1] to control both the overall rate as
 well as the burst rate.
@@ -117,8 +117,13 @@ maximum, which is the speed at which we can pipe messages through channels.
 Same numbers apply to `throttle-fn`, as the implementation uses `throttle-chan`
 under the hood.
 
+## API Docs
+
+Browse the [API Docs][3] for more.
+
 [1]: http://en.wikipedia.org/wiki/Token_bucket
 [2]: https://github.com/hugoduncan/criterium
+[3]: https://brunov.github.io/throttler
 
 ## License
 
