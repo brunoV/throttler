@@ -3,7 +3,8 @@
             [clojure.pprint :refer [pprint]]))
 
 ;; To keep the throttler precise even for high frequencies, we set up a
-;; minimum sleep time.
+;; minimum sleep time. In my tests I found that below 10 ms the actual
+;; sleep time has an error of more than 10%, so we stay above that.
 (def ^{:no-doc true} min-sleep-time 10)
 
 (defn- round [n] (Math/round (double n)))
@@ -54,48 +55,53 @@
     c'))
 
 (defn throttle-chan
+     "Takes a write channel, a goal rate and a unit and returns a read
+      channel. Messages written to the input channel can be read from
+      the throttled output channel at a rate that will be at most the
+      provided goal rate.
 
-     "Takes a write channel, a goal rate and a unit token and returns a
-      read channel. Messages written to the input channel can be read
-      from the throttled output channel at a rate that will be at most
-      the provided goal rate.
-
-      Optionally takes a burst rate, which will correspond to the
-      maximum peak rate allowed over a period of time equal to one
-      'unit'.
+      Optionally takes a bucket size, which will correspond to the
+      maximum number of burst messages.
 
       As an example, the channel produced by calling:
 
-      (throttle-chan (chan) 1 10 :second)
+      (throttle-chan (chan) 1 :second 9)
 
       Will transmit 1 message/second on average but can transmit up to
-      10 messages on a single second.
+      10 messages on a single second (9 burst messages + 1
+      message/second).
+
+      Note that after the burst messages have been consumed they have to
+      be refilled in a quiescent period at the provided rate, so the
+      overall goal rate is not affected in the long term.
 
       The throttled channel will be closed when the input channel
       closes."
 
   ([c rate unit]
-     (throttle-chan c rate rate unit))
+     (throttle-chan c rate unit 1))
 
-  ([c avg-rate burst-rate unit]
+  ([c rate unit bucket-size]
      (when (nil? (unit->ms unit))
        (throw (IllegalArgumentException.
                (str "Invalid unit. Available units are: " (keys unit->ms)))))
-     (when (< burst-rate avg-rate)
-       (throw (IllegalArgumentException. "burst-rate may not be smaller than avg-rate")))
 
-     (let [avg-rate-ms (/ avg-rate (unit->ms unit))
-           bucket-size (max (- burst-rate avg-rate) 1)]
-       (throttle-chan* c avg-rate-ms bucket-size))))
+     (when-not (and (number? rate) (pos? rate))
+       (throw (IllegalArgumentException. "rate should be a positive number")))
+
+     (when (or (not (integer? bucket-size)) (neg? bucket-size))
+       (throw (IllegalArgumentException. "bucket-size should be a non-negative integer")))
+
+     (let [rate-ms (/ rate (unit->ms unit))]
+       (throttle-chan* c rate-ms bucket-size))))
 
 (defn fn-throttler
 
-  "Creates a throttling function. The returned function accepts a
-   function and produces an equivalent one that complies with the
-   desired rate. The same function throttler returned here can be used
-   to create throttled versions of many functions. In that case, all
-   invocations from the returned functions will sum up to the goal
-   average rate.
+  "Creates a function that will globally throttle multiple functions at
+   the provided rate.  The returned function accepts a function and
+   produces an equivalent one that complies with the desired rate. If
+   applied to many functions, the sum af all their invocations in a time
+   interval will sum up to the goal average rate.
 
    Example:
        ; create the function throttler
@@ -117,22 +123,23 @@
    'rate'; if only f1-slow is being called then its throughput will be
    close to rate. Or, if one of the functions is being called from
    multiple threads then it'll get a greater share of the total
-   bandwith. In other words, the functions will use statistical
-   multiplexing to cap the allotted bandwidth."
+   bandwith.
+
+   In other words, the functions will use statistical multiplexing to
+   cap the allotted bandwidth."
 
   ([rate unit]
-     (fn-throttler rate rate unit))
+     (fn-throttler rate unit 1))
 
-  ([avg-rate burst-rate unit]
+  ([rate unit bucket-size]
      (let [in (chan 1)
-           out (throttle-chan in avg-rate burst-rate unit)]
+           out (throttle-chan in rate unit bucket-size)]
 
        ;; This function takes a function and produces a throttled
        ;; function. When called multiple times, all the resulting
-       ;; throttled functions will share the same throttled
-       ;; channel. Their invocations will be funneled together,
-       ;; resulting in a globally shared rate. (the sum af the rates of
-       ;; all functions will be at most the argument rate).
+       ;; throttled functions will share the same throttled channel,
+       ;; resulting in a globally shared rate. I.e., the sum af the
+       ;; rates of all functions will be at most the argument rate).
 
        (fn [f]
          (fn [& args]
@@ -153,7 +160,7 @@
   will behave like a bursty channel. See throttle-chan for details."
 
   ([f rate unit]
-     (throttle-fn f rate rate unit))
+     (throttle-fn f rate unit 1))
 
-  ([f avg-rate burst-rate unit]
-     ((fn-throttler avg-rate burst-rate unit) f)))
+  ([f rate unit bucket-size]
+     ((fn-throttler rate unit bucket-size) f)))
