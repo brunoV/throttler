@@ -10,13 +10,13 @@ well as the burst rate.
 ### Leiningen
 
 ```clj
-[throttler "0.1.5"]
+[throttler "1.0.0"]
 ```
 
 ### Gradle
 
 ```scala
-compile "throttler:throttler:0.1.5"
+compile "throttler:throttler:1.0.0"
 ```
 
 ## Throttling functions
@@ -38,12 +38,12 @@ calls/second:
 (time (dotimes [_ 300] (+# 1 1))) ; "Elapsed time: 3399.865 msecs"
 ```
 
-You can also create a bursty function by optionally supplying a burst rate.
-Let's create a bursty multiply with an average rate of 100 calls/s and a burst rate of 1000 calls/s:
+You can also create a bursty function by optionally supplying a burst size.
+Let's create a bursty multiply with an average rate of 100 calls/s and a burst size of 999 calls:
 
 ```clj
 ; goal: 100 calls/s on avg, bursts of up to 1000 calls/s
-(def *# (throttle-fn * 100 1000 :second))
+(def *# (throttle-fn * 100 :second 999))
 
 (*# 2 3) ; => 6
 
