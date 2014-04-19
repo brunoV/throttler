@@ -22,26 +22,10 @@
       (close! to)
       (>!! to v))))
 
-(defn- throttle-chan* [c rate-ms bucket-size]
+(defn- chan-throttler* [rate-ms bucket-size]
   (let [sleep-time (round (max (/ rate-ms) min-sleep-time))
         token-value (round (* sleep-time rate-ms))   ; how many messages to pipe per token
-        c' (chan)                                    ; the throttled output channel
         bucket (chan (dropping-buffer bucket-size))] ; we model the bucket with a buffered channel
-
-    ;; The piping thread. Takes a token from the bucket (blocking until
-    ;; one is ready if the bucket is empty), and forwards token-value
-    ;; messages from the source channel to the output channel.
-
-    ;; For high frequencies, we leave sleep-time fixed to
-    ;; min-sleep-time, and we increase token-value, the number of
-    ;; messages to pipe per token. For low frequencies, the token-value
-    ;; is 1 and we adjust sleep-time to obtain the desired rate.
-
-    (go
-     (while true
-       (<! bucket) ; block for a token
-       (dotimes [_ token-value]
-         (pipe c c')))) ; pipe token-value messages with the token
 
     ;; The bucket filler thread. Puts a token in the bucket every
     ;; sleep-time seconds. If the bucket is full the token is dropped
@@ -52,7 +36,53 @@
        (>! bucket :token)
        (<! (timeout (int sleep-time)))))
 
-    c'))
+    ;; The piping thread. Takes a token from the bucket (blocking until
+    ;; one is ready if the bucket is empty), and forwards token-value
+    ;; messages from the source channel to the output channel.
+
+    ;; For high frequencies, we leave sleep-time fixed to
+    ;; min-sleep-time, and we increase token-value, the number of
+    ;; messages to pipe per token. For low frequencies, the token-value
+    ;; is 1 and we adjust sleep-time to obtain the desired rate.
+
+    (fn [c]
+      (let [c' (chan)] ; the throttled chan
+        (go
+          (while true
+            (<! bucket) ; block for a token
+            (dotimes [_ token-value]
+              (pipe c c')))) ; pipe token-value messages with the token
+        c'))))
+
+(defn chan-throttler
+  "Returns a function that will take an input channel and return an
+   output channel with the desired rate. Optionally acceps a bucket size
+   for bursty channels.
+
+   If the throttling function returned here is used on more than one
+   channel, they will all share the same token-bucket. This means their
+   overall output rate combined will be equal to the provided rate. In
+   other words, they will all share the alloted bandwith using
+   statistical multiplexing.
+
+   See fn-throttler for an example that can trivially be extrapolated to
+   chan-throttler."
+
+  ([rate unit]
+     (chan-throttler rate unit 1))
+  ([rate unit bucket-size]
+     (when (nil? (unit->ms unit))
+       (throw (IllegalArgumentException.
+               (str "Invalid unit. Available units are: " (keys unit->ms)))))
+
+     (when-not (and (number? rate) (pos? rate))
+       (throw (IllegalArgumentException. "rate should be a positive number")))
+
+     (when (or (not (integer? bucket-size)) (neg? bucket-size))
+       (throw (IllegalArgumentException. "bucket-size should be a non-negative integer")))
+
+     (let [rate-ms (/ rate (unit->ms unit))]
+       (chan-throttler* rate-ms bucket-size))))
 
 (defn throttle-chan
      "Takes a write channel, a goal rate and a unit and returns a read
@@ -82,18 +112,7 @@
      (throttle-chan c rate unit 1))
 
   ([c rate unit bucket-size]
-     (when (nil? (unit->ms unit))
-       (throw (IllegalArgumentException.
-               (str "Invalid unit. Available units are: " (keys unit->ms)))))
-
-     (when-not (and (number? rate) (pos? rate))
-       (throw (IllegalArgumentException. "rate should be a positive number")))
-
-     (when (or (not (integer? bucket-size)) (neg? bucket-size))
-       (throw (IllegalArgumentException. "bucket-size should be a non-negative integer")))
-
-     (let [rate-ms (/ rate (unit->ms unit))]
-       (throttle-chan* c rate-ms bucket-size))))
+     ((chan-throttler rate unit bucket-size) c)))
 
 (defn fn-throttler
 

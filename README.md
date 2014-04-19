@@ -5,6 +5,16 @@ Throttle the throughput of function calls and `core.async` channels.
 Uses the [token bucket algorithm][1] to control both the overall rate as
 well as the burst rate.
 
+Some of its key features:
+
+* Control both average rate and burstiness.
+* Accurate over a large range of rates.
+* Lightweight. Based on core.async, does not rely on Thread/sleep so
+  each throttler does not occupy a full thread. Have as many as you
+  want.
+* Throttle a single function/channel or a group under the same rate
+  using statistical multiplexing.
+
 ## Get it
 
 ### Leiningen
@@ -86,6 +96,43 @@ get `nil`, which means the input channel was closed.
 
 So it took 5.6 seconds to read 5000 messages, resulting in a rate of ~ 0.9
 messages/millisecond.
+
+## Throttle many functions or channels under the same shared rate
+
+With `chan-throttler` or `fn-throttler` you can limit the combined rate
+of a *group* of channels or functions, respectively.
+
+Say for instance you want to use a web API, but you want to limit the
+number of calls you make to avoid going beyond your currently paid
+plan. The API has 3 methods, and you don't want the sum of all calls to
+go over 1000 on a single day.
+
+A naive approach would be to assign 1/3rd of the total rate to each
+method (or some other pre-fixed proportion). But what if you don't know
+in advance what the proportion will be, or if it's likely to change over
+time? In that case you'd be overthrottling some methods and not taking
+full advantage of your calling capacity.
+
+We can do better. To throttle all 3 methods under the same combined
+rate, we create a *function throttler*:
+
+```clj
+(def api-throttler (fn-throttler 1000 :day))
+```
+
+Then we wrap all three API methods with the same `api-throttler`:
+
+```clj
+(require [some.api :as api])
+
+(def f1-slow (api-throttler api/f1))
+(def f2-slow (api-throttler api/f2))
+(def f3-slow (api-throttler api/f3))
+```
+
+Now all `{f1,f2,f3}-slow` will honor the global rate of 1000 calls/day
+whatever the calling ratio among the three methods is.
+
 
 ## Throughput accuracy over a wide range of rates
 
