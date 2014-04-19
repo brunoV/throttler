@@ -14,13 +14,14 @@
    :second 1000 :minute 60000
    :hour 3600000 :day 86400000})
 
-(defn- pipe [from to]
+(defmacro pipe [from to]
   "Pipes an element from the from channel and supplies it to the to
-   channel. The to channel will be closed when the from channel closes."
-  (let [v (<!! from)]
-    (if (nil? v)
-      (close! to)
-      (>!! to v))))
+   channel. The to channel will be closed when the from channel closes.
+   Must be called within a go block."
+  `(let [v# (<! ~from)]
+    (if (nil? v#)
+      (close! ~to)
+      (>! ~to v#))))
 
 (defn- chan-throttler* [rate-ms bucket-size]
   (let [sleep-time (round (max (/ rate-ms) min-sleep-time))
