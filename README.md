@@ -9,8 +9,8 @@ Some of its key features:
 
 * Control both average rate and burstiness.
 * Accurate over a large range of rates.
-* Lightweight. Based on core.async, does not rely on Thread/sleep so
-  each throttler does not occupy a full thread. Have as many as you
+* Lightweight. Based on [core.async][4], does not rely on Thread/sleep so
+  each throttler does not occupy a full thread. Use as many as you
   want.
 * Throttle a single function/channel or a group under the same rate
   using statistical multiplexing.
@@ -133,6 +133,7 @@ Then we wrap all three API methods with the same `api-throttler`:
 Now all `{f1,f2,f3}-slow` will honor the global rate of 1000 calls/day
 whatever the calling ratio among the three methods is.
 
+The same can be done for channels, using `chan-throttler`.
 
 ## Throughput accuracy over a wide range of rates
 
@@ -171,6 +172,7 @@ Browse the [API Docs][3] for more.
 [1]: http://en.wikipedia.org/wiki/Token_bucket
 [2]: https://github.com/hugoduncan/criterium
 [3]: https://brunov.github.io/throttler
+[4]: https://github.com/clojure/core.async
 
 ## License
 
