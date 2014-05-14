@@ -10,8 +10,7 @@ Some of its key features:
 * Control both average rate and burstiness.
 * Accurate over a large range of rates.
 * Lightweight. Based on [core.async][4], does not rely on `Thread/sleep` so
-  each throttler does not require a dedicated thread. Use as many throttlers as
-  you want.
+  each throttler does not require a dedicated thread. Use as many as you want.
 * Throttle a single function/channel or a group under the same rate
   using statistical multiplexing.
 
