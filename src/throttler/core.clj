@@ -70,7 +70,7 @@
    chan-throttler."
 
   ([rate unit]
-     (chan-throttler rate unit 1))
+     (chan-throttler rate unit 0))
   ([rate unit bucket-size]
      (when (nil? (unit->ms unit))
        (throw (IllegalArgumentException.
@@ -110,7 +110,7 @@
       closes."
 
   ([c rate unit]
-     (throttle-chan c rate unit 1))
+     (throttle-chan c rate unit 0))
 
   ([c rate unit bucket-size]
      ((chan-throttler rate unit bucket-size) c)))
@@ -149,7 +149,7 @@
    cap the allotted bandwidth."
 
   ([rate unit]
-     (fn-throttler rate unit 1))
+     (fn-throttler rate unit 0))
 
   ([rate unit bucket-size]
      (let [in (chan 1)
@@ -180,7 +180,7 @@
   will behave like a bursty channel. See throttle-chan for details."
 
   ([f rate unit]
-     (throttle-fn f rate unit 1))
+     (throttle-fn f rate unit 0))
 
   ([f rate unit bucket-size]
      ((fn-throttler rate unit bucket-size) f)))
