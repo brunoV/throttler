@@ -167,14 +167,15 @@ maximum, which is the speed at which we can pipe messages through channels.
 Same numbers apply to `throttle-fn`, as the implementation uses `throttle-chan`
 under the hood.
 
-## API Docs
+## More
 
-Browse the [API Docs][docs] for more.
+Browse the [API Docs][docs] or check out the [blog post][blog] for more.
 
-[token]: http://en.wikipedia.org/wiki/Token_bucket
-[crit]: https://github.com/hugoduncan/criterium
-[docs]: https://brunov.github.io/throttler
+[token]:      http://en.wikipedia.org/wiki/Token_bucket
+[crit]:       https://github.com/hugoduncan/criterium
+[docs]:       https://brunov.github.io/throttler
 [core-async]: https://github.com/clojure/core.async
+[blog]:       http://brunov.org/clojure/2014/05/14/throttler/
 
 ## License
 
