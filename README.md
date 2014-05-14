@@ -2,17 +2,20 @@
 
 Throttle the throughput of function calls and `core.async` channels.
 
-Uses the [token bucket algorithm][1] to control both the overall rate as
+Uses the [token bucket algorithm][token] to control both the overall rate as
 well as the burst rate.
 
 Some of its key features:
 
 * Control both average rate and burstiness.
 * Accurate over a large range of rates.
-* Lightweight. Based on [core.async][4], does not rely on `Thread/sleep` so
-  each throttler does not require a dedicated thread. Use as many as you want.
+* Lightweight. Based on [core.async][core-async], does not rely on
+  `Thread/sleep` so each throttler does not require a dedicated thread. Use as
+  many as you want.
 * Throttle a single function/channel or a group under the same rate
   using statistical multiplexing.
+
+[API Docs][docs]
 
 ## Get it
 
@@ -141,7 +144,7 @@ reasonably accurate over a wide range of rates. High rates are accurate with an
 error margin of ~10% until we reach core.async's maximum possible pipe
 throughput. On my laptop, this happens at about 50,000 messages/second.
 
-Here's the result of running some [Criterium][2] benchmarks on channels
+Here's the result of running some [Criterium][crit] benchmarks on channels
 throttled at different rates.
 
 ```
@@ -166,12 +169,12 @@ under the hood.
 
 ## API Docs
 
-Browse the [API Docs][3] for more.
+Browse the [API Docs][docs] for more.
 
-[1]: http://en.wikipedia.org/wiki/Token_bucket
-[2]: https://github.com/hugoduncan/criterium
-[3]: https://brunov.github.io/throttler
-[4]: https://github.com/clojure/core.async
+[token]: http://en.wikipedia.org/wiki/Token_bucket
+[crit]: https://github.com/hugoduncan/criterium
+[docs]: https://brunov.github.io/throttler
+[core-async]: https://github.com/clojure/core.async
 
 ## License
 
