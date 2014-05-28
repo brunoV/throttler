@@ -10,7 +10,10 @@
 
     (fact "It returns something"
       (throttle-fn + 1 :second) => truthy
-      (throttle-fn + 1 :second 9) => truthy)
+      (throttle-fn + 1 :second :burst 9) => truthy
+      (throttle-fn + 1 :second :granularity :second) => truthy
+      (throttle-fn + 1 :second :granuarity 10) => truthy
+      (throttle-fn + 1 :second :granularity 10 :burst 9) => truthy)
 
       (fact "It acts like the original function"
         (+? 1 1) => (+ 1 1)
@@ -21,13 +24,16 @@
         (rate (fn [] (+?  1 1)) 10) => (roughly 10 2)
         (rate (fn [] (+?? 1 1)) 10) => (roughly 10 2))
 
-      (fact "It fails graciously with the wrong unit"
+      (fact "It fails graciously with wrong arguments"
         (throttle-fn +  1   :foo)       => (throws IllegalArgumentException #"units")
         (throttle-fn + -1   :hour)      => (throws IllegalArgumentException)
         (throttle-fn + :foo :hour)      => (throws IllegalArgumentException)
         (throttle-fn +  0   :hour)      => (throws IllegalArgumentException)
-        (throttle-fn +  1   :hour :foo) => (throws IllegalArgumentException)
-        (throttle-fn +  1   :hour -1)   => (throws IllegalArgumentException))))
+        (throttle-fn +  1   :hour :burst :foo) => (throws IllegalArgumentException)
+        (throttle-fn +  1   :hour :burst -1)   => (throws IllegalArgumentException)
+        (throttle-fn +  1   :hour :granularity :foo) => (throws)
+        (throttle-fn +  1   :hour :granularity 0)    => (throws)
+        (throttle-fn +  1   :hour :granularity -1)   => (throws))))
 
 (facts "about throttle-chan"
   (let [in (chan 1)
