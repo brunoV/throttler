@@ -1,3 +1,6 @@
+*.idea
+.nrepl-port
+*.iml
 *.jar
 *.war
 *jar
@@ -15,3 +18,4 @@ classes
 lib
 pom.xml
 pom.xml.asc
+/etc/
