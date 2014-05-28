@@ -14,6 +14,12 @@
    :second 1000 :minute 60000
    :hour 3600000 :day 86400000})
 
+(defn mapply
+  "Like apply, but applies a map to a function with positional map
+  arguments. Can take optional initial args just like apply."
+  ([f m] (apply f (apply concat m)))
+  ([f arg & args] (apply f arg (concat (butlast args) (apply concat (last args))))))
+
 (defmacro pipe [from to]
   "Pipes an element from the from channel and supplies it to the to
    channel. The to channel will be closed when the from channel closes.
@@ -23,14 +29,23 @@
       (close! ~to)
       (>! ~to v#))))
 
-(defn- chan-throttler* [rate-ms bucket-size]
-  (let [sleep-time (round (max (/ rate-ms) min-sleep-time))
-        token-value (round (* sleep-time rate-ms))   ; how many messages to pipe per token
+(defn- compute-params [rate-ms bucket-size token-value]
+  (let [sleep-time (round (max (/ token-value rate-ms) min-sleep-time))
+        ; how many messages to pipe per token
+        token-value (max (round (* sleep-time rate-ms)) token-value)
+        bucket-size (int (/ bucket-size token-value))]
+
+    [sleep-time token-value bucket-size]))
+
+(defn chan-throttler* [rate-ms bucket-size token-value]
+  ;(pprint ['chan-throttler* rate-ms bucket-size token-value])
+  (let [[sleep-time token-value bucket-size] (compute-params rate-ms bucket-size token-value)
         bucket (chan (dropping-buffer bucket-size))] ; we model the bucket with a buffered channel
 
     ;; The bucket filler thread. Puts a token in the bucket every
     ;; sleep-time seconds. If the bucket is full the token is dropped
     ;; since the bucket channel uses a dropping buffer.
+    ;(pprint {:sleep-time sleep-time :token-value token-value :bucket-size bucket-size})
 
     (go
      (while true
@@ -55,6 +70,17 @@
               (pipe c c')))) ; pipe token-value messages with the token
         c'))))
 
+(defn granularity->token-value [rate-ms g]
+  (if (keyword? g)
+    (do
+      (assert (contains? unit->ms g)
+              (str "Granularity " g " does not correspond to a known unit. Available units are: " (keys unit->ms)))
+      (max (int (* (unit->ms g) rate-ms)) 1))
+    (do
+      (assert (number? g) (str "Granularity " g " is neither a unit nor a number"))
+      (assert (pos? g) (str "Granularity value " g " should be positive"))
+      g)))
+
 (defn chan-throttler
   "Returns a function that will take an input channel and return an
    output channel with the desired rate. Optionally acceps a bucket size
@@ -71,7 +97,8 @@
 
   ([rate unit]
      (chan-throttler rate unit 0))
-  ([rate unit bucket-size]
+  ([rate unit bucket-size & {granularity :granularity :or {granularity 1} :as opts}]
+   ;(pprint [chan-throttler rate unit bucket-size granularity opts])
      (when (nil? (unit->ms unit))
        (throw (IllegalArgumentException.
                (str "Invalid unit. Available units are: " (keys unit->ms)))))
@@ -83,7 +110,7 @@
        (throw (IllegalArgumentException. "bucket-size should be a non-negative integer")))
 
      (let [rate-ms (/ rate (unit->ms unit))]
-       (chan-throttler* rate-ms bucket-size))))
+       (chan-throttler* rate-ms bucket-size (granularity->token-value rate-ms granularity)))))
 
 (defn throttle-chan
      "Takes a write channel, a goal rate and a unit and returns a read
@@ -112,8 +139,9 @@
   ([c rate unit]
      (throttle-chan c rate unit 0))
 
-  ([c rate unit bucket-size]
-     ((chan-throttler rate unit bucket-size) c)))
+  ([c rate unit bucket-size & {:as opts}]
+   ;(pprint ['throttle-chan c rate unit bucket-size opts])
+     ((mapply chan-throttler rate unit bucket-size opts) c)))
 
 (defn fn-throttler
 
@@ -151,9 +179,10 @@
   ([rate unit]
      (fn-throttler rate unit 0))
 
-  ([rate unit bucket-size]
+  ([rate unit bucket-size & {:as opts}]
+     ;(pprint ['fn-throttler rate unit bucket-size opts])
      (let [in (chan 1)
-           out (throttle-chan in rate unit bucket-size)]
+           out (mapply throttle-chan in rate unit bucket-size opts)]
 
        ;; This function takes a function and produces a throttled
        ;; function. When called multiple times, all the resulting
@@ -182,5 +211,5 @@
   ([f rate unit]
      (throttle-fn f rate unit 0))
 
-  ([f rate unit bucket-size]
-     ((fn-throttler rate unit bucket-size) f)))
+  ([f rate unit bucket-size & {:as opts}]
+     ((mapply fn-throttler rate unit bucket-size opts) f)))
