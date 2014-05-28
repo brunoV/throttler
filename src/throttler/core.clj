@@ -14,7 +14,7 @@
    :second 1000 :minute 60000
    :hour 3600000 :day 86400000})
 
-(defn mapply
+(defn- mapply
   "Like apply, but applies a map to a function with positional map
   arguments. Can take optional initial args just like apply."
   ([f m] (apply f (apply concat m)))
