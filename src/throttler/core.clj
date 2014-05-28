@@ -29,55 +29,52 @@
       (close! ~to)
       (>! ~to v#))))
 
-(defn- compute-params [rate-ms bucket-size token-value]
-  (let [sleep-time (round (max (/ token-value rate-ms) min-sleep-time))
-        ; how many messages to pipe per token
-        token-value (max (round (* sleep-time rate-ms)) token-value)
-        bucket-size (int (/ bucket-size token-value))]
-
-    [sleep-time token-value bucket-size]))
-
 (defn chan-throttler* [rate-ms bucket-size token-value]
   ;(pprint ['chan-throttler* rate-ms bucket-size token-value])
-  (let [[sleep-time token-value bucket-size] (compute-params rate-ms bucket-size token-value)
-        bucket (chan (dropping-buffer bucket-size))] ; we model the bucket with a buffered channel
+  (let [sleep-time (max (/ token-value rate-ms) min-sleep-time)
+        token-value (max (round (* sleep-time rate-ms)) token-value)
+        bucket-size (max bucket-size token-value)   ; We have to make sure that at least token-value messages can fit
+                                                    ; in the bucket. Otherwise, a large number of tokens can be lost
+                                                    ; just because there was no reader - this can be particularly
+                                                    ; important for large token-values.
+        bucket (chan (dropping-buffer bucket-size)) ; Model the bucket with a buffered channel.
+        sleep-time (int (round sleep-time))]        ; timeout expects an int, and will fail silently otherwise
 
-    ;; The bucket filler thread. Puts a token in the bucket every
-    ;; sleep-time seconds. If the bucket is full the token is dropped
-    ;; since the bucket channel uses a dropping buffer.
     ;(pprint {:sleep-time sleep-time :token-value token-value :bucket-size bucket-size})
 
-    (go
-     (while true
-       (>! bucket :token)
-       (<! (timeout (int sleep-time)))))
-
-    ;; The piping thread. Takes a token from the bucket (blocking until
-    ;; one is ready if the bucket is empty), and forwards token-value
-    ;; messages from the source channel to the output channel.
+    ;; The bucket filler thread. Puts token-value tokens in the bucket every
+    ;; sleep-time seconds. If the bucket is full the token is dropped
+    ;; since the bucket channel uses a dropping buffer.
 
     ;; For high frequencies, we leave sleep-time fixed to
     ;; min-sleep-time, and we increase token-value, the number of
     ;; messages to pipe per token. For low frequencies, the token-value
     ;; is 1 and we adjust sleep-time to obtain the desired rate.
 
+    (go
+     (while true
+       (dotimes [_ token-value] (>! bucket :token))
+       (<! (timeout sleep-time))))
+
+    ;; The piping thread. Takes a token from the bucket (blocking until
+    ;; one is ready if the bucket is empty), and forwards one message
+    ;; from the source channel to the output channel.
     (fn [c]
       (let [c' (chan)] ; the throttled chan
         (go
           (while true
-            (<! bucket) ; block for a token
-            (dotimes [_ token-value]
-              (pipe c c')))) ; pipe token-value messages with the token
+            (<! bucket)   ; block for a token
+            (pipe c c'))) ; pipe a single message
         c'))))
 
-(defn granularity->token-value [rate-ms g]
+(defn- granularity->token-value [rate-ms g]
   (if (keyword? g)
     (do
       (assert (contains? unit->ms g)
               (str "Granularity " g " does not correspond to a known unit. Available units are: " (keys unit->ms)))
       (max (int (* (unit->ms g) rate-ms)) 1))
     (do
-      (assert (number? g) (str "Granularity " g " is neither a unit nor a number"))
+      (assert (integer? g) (str "Granularity " g " is neither a unit nor an integer"))
       (assert (pos? g) (str "Granularity value " g " should be positive"))
       g)))
 
@@ -97,7 +94,7 @@
 
   ([rate unit]
      (chan-throttler rate unit 0))
-  ([rate unit bucket-size & {granularity :granularity :or {granularity 1} :as opts}]
+  ([rate unit bucket-size & {granularity :granularity :or {granularity 1}}]
    ;(pprint [chan-throttler rate unit bucket-size granularity opts])
      (when (nil? (unit->ms unit))
        (throw (IllegalArgumentException.
