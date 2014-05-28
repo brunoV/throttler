@@ -30,7 +30,6 @@
       (>! ~to v#))))
 
 (defn chan-throttler* [rate-ms bucket-size token-value]
-  ;(pprint ['chan-throttler* rate-ms bucket-size token-value])
   (let [sleep-time (max (/ token-value rate-ms) min-sleep-time)
         token-value (max (round (* sleep-time rate-ms)) token-value)
         bucket-size (max bucket-size token-value)   ; We have to make sure that at least token-value messages can fit
@@ -80,8 +79,8 @@
 
 (defn chan-throttler
   "Returns a function that will take an input channel and return an
-   output channel with the desired rate. Optionally acceps a bucket size
-   for bursty channels.
+   output channel with the desired rate. Accepts the same optional keys
+   as throttle-chan.
 
    If the throttling function returned here is used on more than one
    channel, they will all share the same token-bucket. This means their
@@ -92,56 +91,72 @@
    See fn-throttler for an example that can trivially be extrapolated to
    chan-throttler."
 
-  ([rate unit]
-     (chan-throttler rate unit 0))
-  ([rate unit bucket-size & {granularity :granularity :or {granularity 1}}]
-   ;(pprint [chan-throttler rate unit bucket-size granularity opts])
-     (when (nil? (unit->ms unit))
-       (throw (IllegalArgumentException.
-               (str "Invalid unit. Available units are: " (keys unit->ms)))))
+  [rate unit & {:keys [granularity burst] :or {granularity 1 burst 0}}]
+  (pprint ['chan-throttler rate unit burst granularity])
+  (when (nil? (unit->ms unit))
+    (throw (IllegalArgumentException.
+             (str "Invalid unit. Available units are: " (keys unit->ms)))))
 
-     (when-not (and (number? rate) (pos? rate))
-       (throw (IllegalArgumentException. "rate should be a positive number")))
+  (when-not (and (number? rate) (pos? rate))
+    (throw (IllegalArgumentException. "rate should be a positive number")))
 
-     (when (or (not (integer? bucket-size)) (neg? bucket-size))
-       (throw (IllegalArgumentException. "bucket-size should be a non-negative integer")))
+  (when (or (not (integer? burst)) (neg? burst))
+    (throw (IllegalArgumentException. "bucket-size should be a non-negative integer")))
 
-     (let [rate-ms (/ rate (unit->ms unit))]
-       (chan-throttler* rate-ms bucket-size (granularity->token-value rate-ms granularity)))))
+  (let [rate-ms (/ rate (unit->ms unit))]
+    (chan-throttler* rate-ms burst (granularity->token-value rate-ms granularity))))
 
 (defn throttle-chan
-     "Takes a write channel, a goal rate and a unit and returns a read
-      channel. Messages written to the input channel can be read from
-      the throttled output channel at a rate that will be at most the
-      provided goal rate.
+  "Takes a write channel, a goal rate and a unit and returns a read
+   channel. Messages written to the input channel can be read from
+   the throttled output channel at a rate that will be at most the
+   provided goal rate.
 
-      Optionally takes a bucket size, which will correspond to the
-      maximum number of burst messages.
+   The throttled channel will be closed when the input channel
+   closes.
 
-      As an example, the channel produced by calling:
+   Optional settings:
 
-      (throttle-chan (chan) 1 :second 9)
+   1. :burst - The burst size, or number of tokens that can be stored
+      in the bucket.
+   2. :granularity - Can be either an integer or a keyword representing
+      a time unit (:second, :millisecond, etc). The granularity specifies
+      how tightly the throttler controls the rate. A granularity of 1
+      means that the rate is enforced on each message. A granularity of
+      100 will let 100 messages through before further restricting the
+      rate.
+      The global rate is unaffected.
+      If it is a unit, then the granularity will be set to however many
+      messages per unit the rate dictates. So for example, a rate of
+      10 :second and a granularity of :second is equivalent to setting
+      granularity to 10.
 
-      Will transmit 1 message/second on average but can transmit up to
-      10 messages on a single second (9 burst messages + 1
-      message/second).
+   As an example, the channel produced by calling:
 
-      Note that after the burst messages have been consumed they have to
-      be refilled in a quiescent period at the provided rate, so the
-      overall goal rate is not affected in the long term.
+       (throttle-chan (chan) 1 :second :burst 9)
 
-      The throttled channel will be closed when the input channel
-      closes."
+   Will transmit 1 message/second on average but can transmit up to
+   10 messages on a single second (9 burst messages + 1 message/second).
 
-  ([c rate unit]
-     (throttle-chan c rate unit 0))
+   Note that after the burst messages have been consumed they have to
+   be refilled in a quiescent period at the provided rate, so the overall
+   goal rate is not affected in the long term.
 
-  ([c rate unit bucket-size & {:as opts}]
-   ;(pprint ['throttle-chan c rate unit bucket-size opts])
-     ((mapply chan-throttler rate unit bucket-size opts) c)))
+   Another example, using a higher granularity:
+
+       (throttle-chan c 1000 :hour :granularity :hour)
+
+   The channel returned here will limit messages to 1000 per hour but with
+   no \"traffic shaping\" within the hour. So all 1000 messages can be
+   taken in the first second of the hour; the rate will not be enforced
+   in smaller time intervals. As a comparison, with the default
+   granularity of 1 taking 1000 messages would have taken a full hour
+   (every take would have been spaced by about 3.6 seconds)."
+
+  [c rate unit & {:as opts}]
+  ((mapply chan-throttler rate unit opts) c))
 
 (defn fn-throttler
-
   "Creates a function that will globally throttle multiple functions at
    the provided rate.  The returned function accepts a function and
    produces an equivalent one that complies with the desired rate. If
@@ -171,42 +186,37 @@
    bandwith.
 
    In other words, the functions will use statistical multiplexing to
-   cap the allotted bandwidth."
+   cap the allotted bandwidth.
 
-  ([rate unit]
-     (fn-throttler rate unit 0))
+   Accepts the same optional keys as throttle-chan for controlling
+   burstiness and granularity."
 
-  ([rate unit bucket-size & {:as opts}]
-     ;(pprint ['fn-throttler rate unit bucket-size opts])
-     (let [in (chan 1)
-           out (mapply throttle-chan in rate unit bucket-size opts)]
+  [rate unit & {:as opts}]
+  (let [in (chan 1)
+        out (mapply throttle-chan in rate unit opts)]
 
-       ;; This function takes a function and produces a throttled
-       ;; function. When called multiple times, all the resulting
-       ;; throttled functions will share the same throttled channel,
-       ;; resulting in a globally shared rate. I.e., the sum af the
-       ;; rates of all functions will be at most the argument rate).
+    ;; This function takes a function and produces a throttled
+    ;; function. When called multiple times, all the resulting
+    ;; throttled functions will share the same throttled channel,
+    ;; resulting in a globally shared rate. I.e., the sum af the
+    ;; rates of all functions will be at most the argument rate).
 
-       (fn [f]
-         (fn [& args]
-            ;; The approach is simple: pipe a bogus message through a
-            ;; throttled channel before evaluating the original function.
+    (fn [f]
+      (fn [& args]
+        ;; The approach is simple: pipe a bogus message through a
+        ;; throttled channel before evaluating the original function.
 
-           (>!! in :eval-request)
-           (<!! out)
-           (apply f args))))))
+        (>!! in :eval-request)
+        (<!! out)
+        (apply f args)))))
 
 (defn throttle-fn
-
   "Takes a function, a goal rate and a time unit and returns a
-  function that is equivalent to the original but that will have a maximum
-  throughput of 'rate'.
+  function that is equivalent to the original but that will have a
+  maximum throughput of 'rate'.
 
-  Optionally accepts a burst rate, in which case the resulting function
-  will behave like a bursty channel. See throttle-chan for details."
+  Accepts the same optional keys as throttle-chan for controlling
+  burstiness and granularity."
 
-  ([f rate unit]
-     (throttle-fn f rate unit 0))
-
-  ([f rate unit bucket-size & {:as opts}]
-     ((mapply fn-throttler rate unit bucket-size opts) f)))
+  [f rate unit & {:as opts}]
+  ((mapply fn-throttler rate unit opts) f))
