@@ -1,6 +1,5 @@
 (ns throttler.core
-  (:require [clojure.core.async :as async :refer [chan <!! >!! >! <! timeout go close! dropping-buffer]]
-            [clojure.pprint :refer [pprint]]))
+  (:require [clojure.core.async :as async :refer [chan <!! >!! >! <! timeout go close! dropping-buffer]]))
 
 ;; To keep the throttler precise even for high frequencies, we set up a
 ;; minimum sleep time. In my tests I found that below 10 ms the actual
@@ -38,8 +37,6 @@
                                                     ; important for large token-values.
         bucket (chan (dropping-buffer bucket-size)) ; Model the bucket with a buffered channel.
         sleep-time (int (round sleep-time))]        ; timeout expects an int, and will fail silently otherwise
-
-    ;(pprint {:sleep-time sleep-time :token-value token-value :bucket-size bucket-size})
 
     ;; The bucket filler thread. Puts token-value tokens in the bucket every
     ;; sleep-time seconds. If the bucket is full the token is dropped
@@ -92,7 +89,6 @@
    chan-throttler."
 
   [rate unit & {:keys [granularity burst] :or {granularity 1 burst 0}}]
-  (pprint ['chan-throttler rate unit burst granularity])
   (when (nil? (unit->ms unit))
     (throw (IllegalArgumentException.
              (str "Invalid unit. Available units are: " (keys unit->ms)))))
