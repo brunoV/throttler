@@ -67,7 +67,8 @@
   (if (keyword? g)
     (do
       (assert (contains? unit->ms g)
-              (str "Granularity " g " does not correspond to a known unit. Available units are: " (keys unit->ms)))
+              (str "Granularity " g " does not correspond to a known unit. Available units are: "
+                   (keys unit->ms)))
       (max (int (* (unit->ms g) rate-ms)) 1))
     (do
       (assert (integer? g) (str "Granularity " g " is neither a unit nor an integer"))
