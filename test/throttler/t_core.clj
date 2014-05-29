@@ -1,6 +1,6 @@
 (ns throttler.t-core
   (:use midje.sweet)
-  (:require [clojure.core.async :refer [chan timeout <!! >!! close!]]
+  (:require [clojure.core.async :as async :refer [chan timeout <!! >!! close! alts!!]]
             [throttler.core :refer :all]
             [throttler.bench :refer [rate]]))
 
@@ -46,3 +46,27 @@
    (fact "closing the input closes the output"
      (close! in)
      (<!! out) => nil)))
+
+(facts "about granularity"
+
+  (let [in (chan 10)
+        out (throttle-chan in 10 :second :burst 10 :granularity 10)]
+
+  (fact "When granularity is set to 10, we can take 10 messages immediately"
+    (dotimes [_ 10] (>!! in :message))
+    (dotimes [_ 10] (async/alts!! [out (timeout 0)] :priority true) => [:message out]))
+
+  (fact "But the next take would have to wait"
+    (let [t (timeout 0)]
+      (async/alts!! [out t] :priority true) => [nil t])))
+
+  (let [in (chan 7)
+        out (throttle-chan in 7 :second :granularity :second)]
+
+    (fact "When granularity is set to :second with a rate of 7 :second, we can take 7 messages immediately"
+      (dotimes [_ 7] (>!! in :message))
+      (dotimes [_ 7] (alts!! [out (timeout 0)] :priority true) => [:message out]))
+
+    (fact "But the next take would have to wait"
+      (let [t (timeout 0)]
+        (alts!! [out t] :priority true) => [nil t]))))
