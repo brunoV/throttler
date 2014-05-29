@@ -19,7 +19,7 @@
   ([f m] (apply f (apply concat m)))
   ([f arg & args] (apply f arg (concat (butlast args) (apply concat (last args))))))
 
-(defmacro ^{:no-doc true} pipe [from to]
+(defmacro ^:no-doc pipe [from to]
   "Pipes an element from the from channel and supplies it to the to
    channel. The to channel will be closed when the from channel closes.
    Must be called within a go block."
@@ -81,7 +81,7 @@
 (defn chan-throttler
   "Returns a function that will take an input channel and return an
    output channel with the desired rate. Accepts the same optional keys
-   as throttle<.
+   as [[throttle<]].
 
    If the throttling function returned here is used on more than one
    channel, they will all share the same token-bucket. This means their
@@ -89,8 +89,8 @@
    other words, they will all share the alloted bandwith using
    statistical multiplexing.
 
-   See fn-throttler for an example that can trivially be extrapolated to
-   chan-throttler."
+   See [[fn-throttler]] for an example that can trivially be extrapolated
+   to [[chan-throttler]]."
 
   [rate unit & {:keys [granularity burst] :or {granularity 1 burst 0}}]
   (when (nil? (unit->ms unit))
@@ -117,19 +117,18 @@
 
    Optional settings:
 
-   1. :burst - The burst size, or number of tokens that can be stored
+   * `:burst` - The burst size, or number of tokens that can be stored
       in the bucket.
-   2. :granularity - Can be either an integer or a keyword representing
-      a time unit (:second, :millisecond, etc). The granularity specifies
-      how tightly the throttler controls the rate. A granularity of 1
-      means that the rate is enforced on each message. A granularity of
-      100 will let 100 messages through before further restricting the
-      rate.
-      The global rate is unaffected.
+   * `:granularity` - Can be either an integer or a keyword representing
+      a time unit (`:second`, `:millisecond`, etc). The granularity
+      specifies how tightly the throttler controls the rate. A
+      granularity of 1 means that the rate is enforced on each message.
+      A granularity of 100 will let 100 messages through before further
+      restricting the rate. The global rate is unaffected.
       If it is a unit, then the granularity will be set to however many
       messages per unit the rate dictates. So for example, a rate of
-      10 :second and a granularity of :second is equivalent to setting
-      granularity to 10.
+      `10 :second` and a granularity of `:second` is equivalent to
+      setting granularity to 10.
 
    As an example, the channel produced by calling:
 
@@ -164,6 +163,7 @@
    interval will sum up to the goal average rate.
 
    Example:
+
        ; create the function throttler
        (def slow-to-1-per-minute (fn-throttler 1 :minute)
 
@@ -178,17 +178,16 @@
        (f2-slow)           ; => result, t = 1 minute
        (f3-slow arg)       ; => result, t = 2 minutes
 
-   The combined rate of f1-slow, f2-slow and f3-slow will be equal to
-   'rate'. This does not mean that the rate of each is 1/3rd of
-   'rate'; if only f1-slow is being called then its throughput will be
+   The combined rate of `f1-slow`, `f2-slow` and `f3-slow` will be
+   equal to 'rate'. This does not mean that the rate of each is 1/3rd of
+   'rate'; if only `f1-slow` is being called then its throughput will be
    close to rate. Or, if one of the functions is being called from
-   multiple threads then it'll get a greater share of the total
-   bandwith.
+   multiple threads then it'll get a greater share of the total bandwith.
 
    In other words, the functions will use statistical multiplexing to
    cap the allotted bandwidth.
 
-   Accepts the same optional keys as throttle< for controlling
+   Accepts the same optional keys as [[throttle<]] for controlling
    burstiness and granularity."
 
   [rate unit & {:as opts}]
@@ -215,7 +214,7 @@
   function that is equivalent to the original but that will have a
   maximum throughput of 'rate'.
 
-  Accepts the same optional keys as throttle< for controlling
+  Accepts the same optional keys as [[throttle<]] for controlling
   burstiness and granularity."
 
   [f rate unit & {:as opts}]
