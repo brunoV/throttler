@@ -36,7 +36,7 @@ compile "throttler:throttler:1.0.0"
 Import `throttler.core`:
 
 ```clj
-(require '[throttler.core :refer [throttle-chan throttle-fn]])
+(require '[throttler.core :refer [throttle< throttle-fn]])
 ```
 
 Create a throttled function. Here, we create a slower `+` that runs at 100
@@ -68,13 +68,13 @@ Let's create a bursty multiply with an average rate of 100 calls/s and a burst s
 
 ## Throttling channels
 
-For channels, simply swap `throttle-fn` with `throttle-chan`. It takes an
+For channels, simply swap `throttle-fn` with `throttle<`. It takes an
 input channel that should be written to, and returns a throttled output channel
 that should be read from:
 
 ```clj
 (def in (chan 1))
-(def slow-chan (throttle-chan in 1 :millisecond)) ; 1 msg/ms
+(def slow-chan (throttle< in 1 :millisecond)) ; 1 msg/ms
 
 (>!! in :token) ; => true
 (<!! slow-chan) ; :token
@@ -164,7 +164,7 @@ Goal rate              Observed rate (mean)  Lower quantile (2.5%)  Upper quanti
 The error stays below and at about 10% until we get close to the theoretical
 maximum, which is the speed at which we can pipe messages through channels.
 
-Same numbers apply to `throttle-fn`, as the implementation uses `throttle-chan`
+Same numbers apply to `throttle-fn`, as the implementation uses `throttle<`
 under the hood.
 
 ## More

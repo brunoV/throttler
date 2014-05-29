@@ -35,9 +35,9 @@
         (throttle-fn +  1   :hour :granularity 0)    => (throws)
         (throttle-fn +  1   :hour :granularity -1)   => (throws))))
 
-(facts "about throttle-chan"
+(facts "about throttle<"
   (let [in (chan 1)
-        out (throttle-chan in 10 :second)]
+        out (throttle< in 10 :second)]
 
    (fact "acts like a piped channel"
      (>!! in :token)
@@ -50,7 +50,7 @@
 (facts "about granularity"
 
   (let [in (chan 10)
-        out (throttle-chan in 10 :second :burst 10 :granularity 10)]
+        out (throttle< in 10 :second :burst 10 :granularity 10)]
 
   (fact "When granularity is set to 10, we can take 10 messages immediately"
     (dotimes [_ 10] (>!! in :message))
@@ -61,7 +61,7 @@
       (async/alts!! [out t] :priority true) => [nil t])))
 
   (let [in (chan 7)
-        out (throttle-chan in 7 :second :granularity :second)]
+        out (throttle< in 7 :second :granularity :second)]
 
     (fact "When granularity is set to :second with a rate of 7 :second, we can take 7 messages immediately"
       (dotimes [_ 7] (>!! in :message))

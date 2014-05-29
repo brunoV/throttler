@@ -78,7 +78,7 @@
 (defn chan-throttler
   "Returns a function that will take an input channel and return an
    output channel with the desired rate. Accepts the same optional keys
-   as throttle-chan.
+   as throttle<.
 
    If the throttling function returned here is used on more than one
    channel, they will all share the same token-bucket. This means their
@@ -103,7 +103,7 @@
   (let [rate-ms (/ rate (unit->ms unit))]
     (chan-throttler* rate-ms burst (granularity->token-value rate-ms granularity))))
 
-(defn throttle-chan
+(defn throttle<
   "Takes a write channel, a goal rate and a unit and returns a read
    channel. Messages written to the input channel can be read from
    the throttled output channel at a rate that will be at most the
@@ -130,7 +130,7 @@
 
    As an example, the channel produced by calling:
 
-       (throttle-chan (chan) 1 :second :burst 9)
+       (throttle< (chan) 1 :second :burst 9)
 
    Will transmit 1 message/second on average but can transmit up to
    10 messages on a single second (9 burst messages + 1 message/second).
@@ -141,7 +141,7 @@
 
    Another example, using a higher granularity:
 
-       (throttle-chan c 1000 :hour :granularity :hour)
+       (throttle< c 1000 :hour :granularity :hour)
 
    The channel returned here will limit messages to 1000 per hour but with
    no \"traffic shaping\" within the hour. So all 1000 messages can be
@@ -185,12 +185,12 @@
    In other words, the functions will use statistical multiplexing to
    cap the allotted bandwidth.
 
-   Accepts the same optional keys as throttle-chan for controlling
+   Accepts the same optional keys as throttle< for controlling
    burstiness and granularity."
 
   [rate unit & {:as opts}]
   (let [in (chan 1)
-        out (mapply throttle-chan in rate unit opts)]
+        out (mapply throttle< in rate unit opts)]
 
     ;; This function takes a function and produces a throttled
     ;; function. When called multiple times, all the resulting
@@ -212,7 +212,7 @@
   function that is equivalent to the original but that will have a
   maximum throughput of 'rate'.
 
-  Accepts the same optional keys as throttle-chan for controlling
+  Accepts the same optional keys as throttle< for controlling
   burstiness and granularity."
 
   [f rate unit & {:as opts}]
