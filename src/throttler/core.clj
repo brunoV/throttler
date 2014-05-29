@@ -9,9 +9,9 @@
 (defn- round [n] (Math/round (double n)))
 
 (def ^{:no-doc true} unit->ms
-  {:microsecond 0.001 :millisecond 1
-   :second 1000 :minute 60000
-   :hour 3600000 :day 86400000})
+  {:microsecond 0.001 :minute 60000
+   :millisecond 1     :hour   3600000
+   :second      1000  :day    86400000})
 
 (defn- mapply
   "Like apply, but applies a map to a function with positional map
@@ -24,19 +24,22 @@
    channel. The to channel will be closed when the from channel closes.
    Must be called within a go block."
   `(let [v# (<! ~from)]
-    (if (nil? v#)
-      (close! ~to)
-      (>! ~to v#))))
+     (if (nil? v#)
+       (close! ~to)
+       (>! ~to v#))))
 
 (defn- chan-throttler* [rate-ms bucket-size token-value]
   (let [sleep-time (max (/ token-value rate-ms) min-sleep-time)
         token-value (max (round (* sleep-time rate-ms)) token-value)
-        bucket-size (max bucket-size token-value)   ; We have to make sure that at least token-value messages can fit
-                                                    ; in the bucket. Otherwise, a large number of tokens can be lost
-                                                    ; just because there was no reader - this can be particularly
-                                                    ; important for large token-values.
-        bucket (chan (dropping-buffer bucket-size)) ; Model the bucket with a buffered channel.
-        sleep-time (int (round sleep-time))]        ; timeout expects an int, and will fail silently otherwise
+        ; We have to make sure that at least token-value messages can fit
+        ; in the bucket. Otherwise, a large number of tokens can be lost
+        ; just because there was no reader - this can be particularly
+        ; important for large token-values.
+        bucket-size (max bucket-size token-value)
+        ; Model the bucket with a buffered channel.
+        bucket (chan (dropping-buffer bucket-size))
+        ; timeout expects an int, and will fail silently otherwise
+        sleep-time (int (round sleep-time))]
 
     ;; The bucket filler thread. Puts token-value tokens in the bucket every
     ;; sleep-time seconds. If the bucket is full the token is dropped
@@ -48,15 +51,15 @@
     ;; is 1 and we adjust sleep-time to obtain the desired rate.
 
     (go
-     (while true
-       (dotimes [_ token-value] (>! bucket :token))
-       (<! (timeout sleep-time))))
+      (while true
+        (dotimes [_ token-value] (>! bucket :token))
+        (<! (timeout sleep-time))))
 
     ;; The piping thread. Takes a token from the bucket (blocking until
     ;; one is ready if the bucket is empty), and forwards one message
     ;; from the source channel to the output channel.
     (fn [c]
-      (let [c' (chan)] ; the throttled chan
+      (let [c' (chan)]    ; the throttled chan
         (go
           (while true
             (<! bucket)   ; block for a token
@@ -67,8 +70,8 @@
   (if (keyword? g)
     (do
       (assert (contains? unit->ms g)
-              (str "Granularity " g " does not correspond to a known unit. Available units are: "
-                   (keys unit->ms)))
+              (str "Granularity " g " does not correspond to a known unit."
+                   " Available units are: " (keys unit->ms)))
       (max (int (* (unit->ms g) rate-ms)) 1))
     (do
       (assert (integer? g) (str "Granularity " g " is neither a unit nor an integer"))
