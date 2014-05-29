@@ -19,7 +19,7 @@
   ([f m] (apply f (apply concat m)))
   ([f arg & args] (apply f arg (concat (butlast args) (apply concat (last args))))))
 
-(defmacro pipe [from to]
+(defmacro ^{:no-doc true} pipe [from to]
   "Pipes an element from the from channel and supplies it to the to
    channel. The to channel will be closed when the from channel closes.
    Must be called within a go block."
@@ -28,7 +28,7 @@
       (close! ~to)
       (>! ~to v#))))
 
-(defn chan-throttler* [rate-ms bucket-size token-value]
+(defn- chan-throttler* [rate-ms bucket-size token-value]
   (let [sleep-time (max (/ token-value rate-ms) min-sleep-time)
         token-value (max (round (* sleep-time rate-ms)) token-value)
         bucket-size (max bucket-size token-value)   ; We have to make sure that at least token-value messages can fit
