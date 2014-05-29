@@ -22,11 +22,22 @@
 (defmacro ^:no-doc pipe [from to]
   "Pipes an element from the from channel and supplies it to the to
    channel. The to channel will be closed when the from channel closes.
-   Must be called within a go block."
+   Must be called within a go block. Returns true if the put succeeded,
+   or nil if the input channel is closed."
   `(let [v# (<! ~from)]
      (if (nil? v#)
        (close! ~to)
        (>! ~to v#))))
+
+(defmacro ^:no-doc put-tokens! [c n]
+  "Puts n tokens into channel c. Returns false if the channel is closed
+  before all tokens are inserted, true otherwise. Must be called within
+  a go block."
+  `(loop [[t# & r#] (for [_# (range ~n)] :token)]
+     (if t#
+       (when (>! ~c t#)
+         (recur r#))    ; put succeeded
+       true)))
 
 (defn- chan-throttler* [rate-ms bucket-size token-value]
   (let [sleep-time (max (/ token-value rate-ms) min-sleep-time)
@@ -51,19 +62,22 @@
     ;; is 1 and we adjust sleep-time to obtain the desired rate.
 
     (go
-      (while true
-        (dotimes [_ token-value] (>! bucket :token))
-        (<! (timeout sleep-time))))
+      (loop []
+        (when (put-tokens! bucket token-value)
+          (<! (timeout sleep-time))
+          (recur))))
 
     ;; The piping thread. Takes a token from the bucket (blocking until
     ;; one is ready if the bucket is empty), and forwards one message
     ;; from the source channel to the output channel.
     (fn [c]
-      (let [c' (chan)]    ; the throttled chan
+      (let [c' (chan)]        ; the throttled chan
         (go
-          (while true
-            (<! bucket)   ; block for a token
-            (pipe c c'))) ; pipe a single message
+          (loop []
+            (<! bucket)       ; block for a token
+            (when (pipe c c') ; pipe a single message
+              (recur)))
+          (close! bucket))    ; close bucket if input channel closes
         c'))))
 
 (defn- granularity->token-value [rate-ms g]
