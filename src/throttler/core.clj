@@ -33,7 +33,7 @@
   "Puts n tokens into channel c. Returns false if the channel is closed
   before all tokens are inserted, true otherwise. Must be called within
   a go block."
-  `(loop [[t# & r#] (for [_# (range ~n)] :token)]
+  `(loop [[t# & r#] (repeat ~n :token)]
      (if t#
        (when (>! ~c t#)
          (recur r#))    ; put succeeded
