@@ -7,3 +7,6 @@
         time-s (/ time-ns 1E9)
         rate (double (/ n time-s))]
     rate))
+
+(defn combined-rate [fs expected-rate-s]
+  (rate #((rand-nth fs)) expected-rate-s))

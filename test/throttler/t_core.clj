@@ -2,7 +2,7 @@
   (:use midje.sweet)
   (:require [clojure.core.async :as async :refer [chan timeout <!! >!! close! alts!!]]
             [throttler.core :refer :all]
-            [throttler.bench :refer [rate]]))
+            [throttler.bench :refer :all]))
 
 (facts "about throttle-fn"
   (let [+?  (throttle-fn + 10       :second)
@@ -70,3 +70,14 @@
     (fact "But the next take would have to wait"
       (let [t (timeout 0)]
         (alts!! [out t] :priority true) => [nil t]))))
+
+(facts "about shared throttling"
+  (let [t (fn-throttler 10 :second)
+        +# (t +)
+        *# (t *)]
+    (fact "Functions act like the original ones"
+      (+# 1 1) => (+ 1 1)
+      (*# 1 2 3) => (* 1 2 3))
+
+    (fact "Their combined rate is close to the prescribed rate"
+      (combined-rate [+# *#] 10) => (roughly 10 2))))
