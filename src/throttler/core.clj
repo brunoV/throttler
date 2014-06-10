@@ -4,22 +4,22 @@
 ;; To keep the throttler precise even for high frequencies, we set up a
 ;; minimum sleep time. In my tests I found that below 10 ms the actual
 ;; sleep time has an error of more than 10%, so we stay above that.
-(def ^{:no-doc true} min-sleep-time 10)
+(def ^:private min-sleep-time 10)
 
 (defn- round [n] (Math/round (double n)))
 
-(def ^{:no-doc true} unit->ms
+(def ^:private unit->ms
   {:microsecond 0.001 :minute 60000
    :millisecond 1     :hour   3600000
    :second      1000  :day    86400000})
 
-(defn- mapply
+(defn- ^:private mapply
   "Like apply, but applies a map to a function with positional map
   arguments. Can take optional initial args just like apply."
   ([f m] (apply f (apply concat m)))
   ([f arg & args] (apply f arg (concat (butlast args) (apply concat (last args))))))
 
-(defmacro ^:no-doc pipe [from to]
+(defmacro ^:private pipe [from to]
   "Pipes an element from the from channel and supplies it to the to
    channel. The to channel will be closed when the from channel closes.
    Must be called within a go block. Returns true if the put succeeded,
@@ -29,7 +29,7 @@
        (close! ~to)
        (>! ~to v#))))
 
-(defmacro ^:no-doc put-tokens! [c n]
+(defmacro ^:private put-tokens! [c n]
   "Puts n tokens into channel c. Returns false if the channel is closed
   before all tokens are inserted, true otherwise. Must be called within
   a go block."
