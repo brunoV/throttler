@@ -25,15 +25,15 @@
         (rate (fn [] (+?? 1 1)) 10) => (roughly 10 2))
 
       (fact "It fails graciously with wrong arguments"
-        (throttle-fn +  1   :foo)       => (throws IllegalArgumentException #"units")
-        (throttle-fn + -1   :hour)      => (throws IllegalArgumentException)
-        (throttle-fn + :foo :hour)      => (throws IllegalArgumentException)
-        (throttle-fn +  0   :hour)      => (throws IllegalArgumentException)
-        (throttle-fn +  1   :hour :burst :foo) => (throws IllegalArgumentException)
-        (throttle-fn +  1   :hour :burst -1)   => (throws IllegalArgumentException)
-        (throttle-fn +  1   :hour :granularity :foo) => (throws)
-        (throttle-fn +  1   :hour :granularity 0)    => (throws)
-        (throttle-fn +  1   :hour :granularity -1)   => (throws))))
+        (throttle-fn +  1   :foo)       => (throws AssertionError)
+        (throttle-fn + -1   :hour)      => (throws AssertionError)
+        (throttle-fn + :foo :hour)      => (throws AssertionError)
+        (throttle-fn +  0   :hour)      => (throws AssertionError)
+        (throttle-fn +  1   :hour :burst :foo) => (throws AssertionError)
+        (throttle-fn +  1   :hour :burst -1)   => (throws AssertionError)
+        (throttle-fn +  1   :hour :granularity :foo) => (throws AssertionError)
+        (throttle-fn +  1   :hour :granularity 0)    => (throws AssertionError)
+        (throttle-fn +  1   :hour :granularity -1)   => (throws AssertionError))))
 
 (facts "about throttle<"
   (let [in (chan 1)

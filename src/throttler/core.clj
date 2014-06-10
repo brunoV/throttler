@@ -107,15 +107,12 @@
    to [[chan-throttler]]."
 
   [rate unit & {:keys [granularity burst] :or {granularity 1 burst 0}}]
-  (when (nil? (unit->ms unit))
-    (throw (IllegalArgumentException.
-             (str "Invalid unit. Available units are: " (keys unit->ms)))))
 
-  (when-not (and (number? rate) (pos? rate))
-    (throw (IllegalArgumentException. "rate should be a positive number")))
-
-  (when (or (not (integer? burst)) (neg? burst))
-    (throw (IllegalArgumentException. "bucket-size should be a non-negative integer")))
+  {:pre [(unit->ms unit)
+         (number? rate)
+         (pos? rate)
+         (integer? burst)
+         (not (neg? burst))]}
 
   (let [rate-ms (/ rate (unit->ms unit))]
     (chan-throttler* rate-ms burst (granularity->token-value rate-ms granularity))))
