@@ -1,5 +1,5 @@
 (ns throttler.core
-  (:require [clojure.core.async :as async :refer [chan <!! >!! >! <! timeout go close! dropping-buffer]]))
+  (:require [clojure.core.async :as async :refer [chan <!! >!! >! <! go close! dropping-buffer]]))
 
 ;; To keep the throttler precise even for high frequencies, we set up a
 ;; minimum sleep time. In my tests I found that below 10 ms the actual
@@ -39,7 +39,11 @@
          (recur r#))    ; put succeeded
        true)))
 
-(defn- chan-throttler* [rate-ms bucket-size token-value]
+(defn- token-bucket*
+  "Creates a channel representing a leaky token bucket. The keyword :token will
+  be put into the channel at the specified rate, token-value at a time. The
+  channel's buffer is of size bucket-size."
+  [rate-ms bucket-size token-value]
   (let [sleep-time (max (/ token-value rate-ms) min-sleep-time)
         token-value (max (round (* sleep-time rate-ms)) token-value)
         ; We have to make sure that at least token-value messages can fit
@@ -60,25 +64,13 @@
     ;; min-sleep-time, and we increase token-value, the number of
     ;; messages to pipe per token. For low frequencies, the token-value
     ;; is 1 and we adjust sleep-time to obtain the desired rate.
-
     (go
       (loop []
         (when (put-tokens! bucket token-value)
-          (<! (timeout sleep-time))
+          (<! (async/timeout sleep-time))
           (recur))))
 
-    ;; The piping thread. Takes a token from the bucket (blocking until
-    ;; one is ready if the bucket is empty), and forwards one message
-    ;; from the source channel to the output channel.
-    (fn [c]
-      (let [c' (chan)]        ; the throttled chan
-        (go
-          (loop []
-            (<! bucket)       ; block for a token
-            (when (pipe c c') ; pipe a single message
-              (recur)))
-          (close! bucket))    ; close bucket if input channel closes
-        c'))))
+    bucket))
 
 (defn- granularity->token-value [rate-ms g]
   (if (keyword? g)
@@ -91,6 +83,17 @@
       (assert (integer? g) (str "Granularity " g " is neither a unit nor an integer"))
       (assert (pos? g) (str "Granularity value " g " should be positive"))
       g)))
+
+(defn- token-bucket
+  [rate unit {:keys [granularity burst] :or {granularity 1 burst 0}}]
+  {:pre [(unit->ms unit)
+         (number? rate)
+         (pos? rate)
+         (integer? burst)
+         (not (neg? burst))]}
+
+  (let [rate-ms (/ rate (unit->ms unit))]
+    (token-bucket* rate-ms burst (granularity->token-value rate-ms granularity))))
 
 (defn chan-throttler
   "Returns a function that will take an input channel and return an
@@ -106,16 +109,22 @@
    See [[fn-throttler]] for an example that can trivially be extrapolated
    to [[chan-throttler]]."
 
-  [rate unit & {:keys [granularity burst] :or {granularity 1 burst 0}}]
+  [rate unit & {:keys [granularity burst] :or {granularity 1 burst 0} :as opts}]
 
-  {:pre [(unit->ms unit)
-         (number? rate)
-         (pos? rate)
-         (integer? burst)
-         (not (neg? burst))]}
+  (let [bucket (token-bucket rate unit opts)]
 
-  (let [rate-ms (/ rate (unit->ms unit))]
-    (chan-throttler* rate-ms burst (granularity->token-value rate-ms granularity))))
+    ;; The piping thread. Takes a token from the bucket (blocking until
+    ;; one is ready if the bucket is empty), and forwards one message
+    ;; from the source channel to the output channel.
+    (fn [c]
+      (let [c' (chan)]        ; the throttled chan
+        (go
+          (loop []
+            (<! bucket)       ; block for a token
+            (when (pipe c c') ; pipe a single message
+              (recur)))
+          (close! bucket))    ; close bucket if input channel closes
+        c'))))
 
 (defn throttle<
   "Takes a write channel, a goal rate and a unit and returns a read
@@ -199,11 +208,14 @@
    cap the allotted bandwidth.
 
    Accepts the same optional keys as [[throttle<]] for controlling
-   burstiness and granularity."
+   burstiness and granularity.
+
+   The throttling function accepts the same optional keywords as [[throttle-fn]],
+   `:timeout` and `:on-timeout.`"
 
   [rate unit & {:as opts}]
-  (let [in (chan 1)
-        out (mapply throttle< in rate unit opts)]
+  (let [bucket (token-bucket rate unit opts)
+        timed-out #(throw (RuntimeException. "timed out"))]
 
     ;; This function takes a function and produces a throttled
     ;; function. When called multiple times, all the resulting
@@ -211,14 +223,16 @@
     ;; resulting in a globally shared rate. I.e., the sum af the
     ;; rates of all functions will be at most the argument rate).
 
-    (fn [f]
-      (fn [& args]
-        ;; The approach is simple: pipe a bogus message through a
-        ;; throttled channel before evaluating the original function.
+    (fn throttler
+      ([f] (throttler {} f))
 
-        (>!! in :eval-request)
-        (<!! out)
-        (apply f args)))))
+      ([{:keys [timeout on-timeout]
+         :or {timeout Integer/MAX_VALUE on-timeout timed-out}}
+        f]
+         (fn [& args]
+           (async/alt!!
+             bucket (apply f args)
+             (async/timeout timeout) (on-timeout)))))))
 
 (defn throttle-fn
   "Takes a function, a goal rate and a time unit and returns a
@@ -226,7 +240,18 @@
   maximum throughput of 'rate'.
 
   Accepts the same optional keys as [[throttle<]] for controlling
-  burstiness and granularity."
+  burstiness and granularity.
+
+  By default, the function will block the calling thread until it gets
+  an execution permit. You can control how much time it is ok to wait,
+  and what to do with when the timeout is reached, with the `:timeout`
+  and `:on-timeout` options:
+
+  * `:timeout`: the maximum number of milliseconds to wait for an
+     execution permit. Defaults to `Integer/MAX_VALUE`. Setting
+    it to 0 or -1 means no waiting.
+  * `:on-timeout`: a zero-arg function that will be called when the
+     timeout is hit. Defaults to throwing a `RuntimeException`."
 
   [f rate unit & {:as opts}]
-  ((mapply fn-throttler rate unit opts) f))
+  ((mapply fn-throttler rate unit opts) opts f))
