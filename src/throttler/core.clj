@@ -231,7 +231,7 @@
              bucket (apply f args)
              (async/timeout timeout) (on-timeout)))))))
 
-(defn throttle-fn
+(defn throttle
   "Takes a function, a goal rate and a time unit and returns a
   function that is equivalent to the original but that will have a
   maximum throughput of 'rate'.
@@ -252,3 +252,19 @@
 
   [f rate unit & {:as opts}]
   ((mapply fn-throttler rate unit opts) opts f))
+
+;;; For backwards compatibility
+
+(defn ^{:deprecated "2.0.0"} throttle-chan
+  "Deprecated. Please use [[throttle<]] instead."
+  ([chan rate unit]
+   (throttle< chan rate unit))
+  ([chan rate unit burst]
+   (throttle< chan rate unit :burst burst)))
+
+(defn ^{:deprecated "2.0.0"} throttle-fn
+  "Deprecated. Please use [[throttle]] instead."
+  ([f rate unit]
+   (throttle f rate unit))
+  ([f rate unit burst]
+   (throttle f rate unit :burst burst)))
