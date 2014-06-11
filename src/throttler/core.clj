@@ -65,11 +65,8 @@
     ;; messages to pipe per token. For low frequencies, the token-value
     ;; is 1 and we adjust sleep-time to obtain the desired rate.
     (go
-      (loop []
-        (when (put-tokens! bucket token-value)
-          (<! (async/timeout sleep-time))
-          (recur))))
-
+      (while (put-tokens! bucket token-value)
+        (<! (async/timeout sleep-time))))
     bucket))
 
 (defn- granularity->token-value [rate-ms g]
