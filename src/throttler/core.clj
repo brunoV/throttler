@@ -1,7 +1,7 @@
 (ns throttler.core
   (:require [clojure.core.async :as async :refer [chan <!! >!! >! <! go close! dropping-buffer]]))
 
-;; To keep the throttler precise even for high frequencies, we set up a
+;; To keep the throttler precise even at high frequencies, we set up a
 ;; minimum sleep time. In my tests I found that below 10 ms the actual
 ;; sleep time has an error of more than 10%, so we stay above that.
 (def ^:private min-sleep-time 10)
@@ -46,14 +46,14 @@
   [rate-ms bucket-size token-value]
   (let [sleep-time (max (/ token-value rate-ms) min-sleep-time)
         token-value (max (round (* sleep-time rate-ms)) token-value)
-        ; We have to make sure that at least token-value messages can fit
-        ; in the bucket. Otherwise, a large number of tokens can be lost
-        ; just because there was no reader - this can be particularly
-        ; important for large token-values.
+        ;; We have to make sure that at least token-value messages can fit
+        ;; in the bucket. Otherwise, a large number of tokens can be lost
+        ;; just because there was no reader - this can be particularly
+        ;; important for large token-values.
         bucket-size (max bucket-size token-value)
-        ; Model the bucket with a buffered channel.
+        ;; Model the bucket with a buffered channel.
         bucket (chan (dropping-buffer bucket-size))
-        ; timeout expects an int, and will fail silently otherwise
+        ;; timeout expects an int, and will fail silently otherwise
         sleep-time (int (round sleep-time))]
 
     ;; The bucket filler thread. Puts token-value tokens in the bucket every
@@ -75,7 +75,11 @@
       (assert (contains? unit->ms g)
               (str "Granularity " g " does not correspond to a known unit."
                    " Available units are: " (keys unit->ms)))
-      (max (int (* (unit->ms g) rate-ms)) 1))
+      (-> g           ; a time unit
+          unit->ms    ; in milliseconds
+          (* rate-ms) ; number of tokens per 'g'
+          int
+          (max 1)))
     (do
       (assert (integer? g) (str "Granularity " g " is neither a unit nor an integer"))
       (assert (pos? g) (str "Granularity value " g " should be positive"))
@@ -89,8 +93,9 @@
          (integer? burst)
          (not (neg? burst))]}
 
-  (let [rate-ms (/ rate (unit->ms unit))]
-    (token-bucket* rate-ms burst (granularity->token-value rate-ms granularity))))
+  (let [rate-ms (/ rate (unit->ms unit))
+        token-value (granularity->token-value rate-ms granularity)]
+    (token-bucket* rate-ms burst token-value)))
 
 (defn chan-throttler
   "Returns a function that will take an input channel and return an
@@ -99,9 +104,9 @@
 
    If the throttling function returned here is used on more than one
    channel, they will all share the same token-bucket. This means their
-   overall output rate combined will be equal to the provided rate. In
-   other words, they will all share the alloted bandwith using
-   statistical multiplexing.
+   combined output rate will be equal to the desired rate. In other
+   words, they will all share the alloted bandwith using statistical
+   multiplexing.
 
    See [[fn-throttler]] for an example that can trivially be extrapolated
    to [[chan-throttler]]."
@@ -109,7 +114,6 @@
   [rate unit & {:keys [granularity burst] :or {granularity 1 burst 0} :as opts}]
 
   (let [bucket (token-bucket rate unit opts)]
-
     ;; The piping thread. Takes a token from the bucket (blocking until
     ;; one is ready if the bucket is empty), and forwards one message
     ;; from the source channel to the output channel.
@@ -196,8 +200,8 @@
        (f3-slow arg)       ; => result, t = 2 minutes
 
    The combined rate of `f1-slow`, `f2-slow` and `f3-slow` will be
-   equal to 'rate'. This does not mean that the rate of each is 1/3rd of
-   'rate'; if only `f1-slow` is being called then its throughput will be
+   equal to `rate`. This does not mean that the rate of each is 1/3rd of
+   `rate`; if only `f1-slow` is being called then its throughput will be
    close to rate. Or, if one of the functions is being called from
    multiple threads then it'll get a greater share of the total bandwith.
 
@@ -207,18 +211,18 @@
    Accepts the same optional keys as [[throttle<]] for controlling
    burstiness and granularity.
 
-   The throttling function accepts the same optional keywords as [[throttle-fn]],
-   `:timeout` and `:on-timeout.`"
+   The throttling function accepts the same optional keywords as
+   [[throttle]], `:timeout` and `:on-timeout.`"
 
   [rate unit & {:as opts}]
   (let [bucket (token-bucket rate unit opts)
         timed-out #(throw (RuntimeException. "timed out"))]
 
-    ;; This function takes a function and produces a throttled
-    ;; function. When called multiple times, all the resulting
-    ;; throttled functions will share the same throttled channel,
-    ;; resulting in a globally shared rate. I.e., the sum af the
-    ;; rates of all functions will be at most the argument rate).
+    ;; The function returned here takes a function and produces a
+    ;; throttled function. When called multiple times, all the
+    ;; resulting throttled functions will share the same throttled
+    ;; channel, resulting in a globally shared rate. I.e., the sum
+    ;; af the rates of all functions will be at most the argument rate).
 
     (fn throttler
       ([f] (throttler {} f))
@@ -234,21 +238,32 @@
 (defn throttle
   "Takes a function, a goal rate and a time unit and returns a
   function that is equivalent to the original but that will have a
-  maximum throughput of 'rate'.
+  maximum throughput of `rate`.
 
   Accepts the same optional keys as [[throttle<]] for controlling
   burstiness and granularity.
 
   By default, the function will block the calling thread until it gets
   an execution permit. You can control how much time it is ok to wait,
-  and what to do with when the timeout is reached, with the `:timeout`
-  and `:on-timeout` options:
+  and what to do when the timeout is reached, with the `:timeout` and
+  `:on-timeout` options:
 
   * `:timeout`: the maximum number of milliseconds to wait for an
      execution permit. Defaults to `Integer/MAX_VALUE`. Setting
     it to 0 or -1 means no waiting.
   * `:on-timeout`: a zero-arg function that will be called when the
-     timeout is hit. Defaults to throwing a `RuntimeException`."
+     timeout is hit. Defaults to throwing a `RuntimeException`.
+
+  Here's an example of a throttled function that will never block;
+  if the token bucket has no tokens, it will return a default value:
+
+      (defn get-thing [url] (...))
+      (def default-thing (...))
+
+      (def get-thing-throttled
+        (throttle get-thing 10 :second
+                           :timeout 0
+                           :on-timeout (constantly default-thing))"
 
   [f rate unit & {:as opts}]
   ((mapply fn-throttler rate unit opts) opts f))
