@@ -6,4 +6,5 @@
   :dependencies [[org.clojure/clojure "1.5.1"]
                  [org.clojure/core.async "0.1.278.0-76b25b-alpha"]]
   :profiles {:dev {:dependencies [[midje "1.5.1"]
-                                  [criterium "0.4.3"]]}})
+                                  [criterium "0.4.3"]]
+                   :plugins [[lein-midje "3.1.1"]]}})

@@ -14,15 +14,6 @@
    :second 1000 :minute 60000
    :hour 3600000 :day 86400000})
 
-(defmacro pipe [from to]
-  "Pipes an element from the from channel and supplies it to the to
-   channel. The to channel will be closed when the from channel closes.
-   Must be called within a go block."
-  `(let [v# (<! ~from)]
-    (if (nil? v#)
-      (close! ~to)
-      (>! ~to v#))))
-
 (defn- chan-throttler* [rate-ms bucket-size]
   (let [sleep-time (round (max (/ rate-ms) min-sleep-time))
         token-value (round (* sleep-time rate-ms))   ; how many messages to pipe per token
@@ -33,8 +24,7 @@
     ;; since the bucket channel uses a dropping buffer.
 
     (go
-     (while true
-       (>! bucket :token)
+     (while (>! bucket :token)
        (<! (timeout (int sleep-time)))))
 
     ;; The piping thread. Takes a token from the bucket (blocking until
@@ -49,10 +39,14 @@
     (fn [c]
       (let [c' (chan)] ; the throttled chan
         (go
-          (while true
-            (<! bucket) ; block for a token
+          (while (<! bucket) ; block for a token
             (dotimes [_ token-value]
-              (pipe c c')))) ; pipe token-value messages with the token
+              (let [v (<! c)]
+                (if v
+                  (>! c' v)
+                  (do
+                    (close! c')
+                    (close! bucket)))))))
         c'))))
 
 (defn chan-throttler
