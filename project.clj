@@ -7,4 +7,6 @@
                  [org.clojure/core.async "0.1.303.0-886421-alpha"]]
   :profiles {:dev {:dependencies [[midje "1.6.3"]
                                   [criterium "0.4.3"]]}}
-  :codox {:defaults {:doc/format :markdown}})
+  :codox {:defaults {:doc/format :markdown}
+          :src-dir-uri "http://github.com/brunov/throttler/blob/master/"
+          :src-linenum-anchor-prefix "L"})
