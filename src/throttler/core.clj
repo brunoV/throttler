@@ -12,7 +12,8 @@
 (def ^{:no-doc true} unit->ms
   {:microsecond 0.001 :millisecond 1
    :second 1000 :minute 60000
-   :hour 3600000 :day 86400000})
+   :hour 3600000 :day 86400000
+   :month 2678400000})
 
 (defmacro pipe [from to]
   "Pipes an element from the from channel and supplies it to the to
