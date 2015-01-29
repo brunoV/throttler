@@ -24,18 +24,26 @@
        (close! ~to)
        (>! ~to v#))))
 
-(defn- chan-throttler* [rate-ms bucket-size]
+(defn- chan-throttler* [rate-ms bucket-size bucket-fill]
   (let [sleep-time (round (max (/ rate-ms) min-sleep-time))
         token-value (round (* sleep-time rate-ms))   ; how many messages to pipe per token
         bucket (chan (dropping-buffer bucket-size))] ; we model the bucket with a buffered channel
+
+    ;; prefill the bucket with tokens to permit immediate bursting
+    (dotimes [i bucket-fill] (>!! bucket :token))
 
     ;; The bucket filler thread. Puts a token in the bucket every
     ;; sleep-time seconds. If the bucket is full the token is dropped
     ;; since the bucket channel uses a dropping buffer.
 
     (go
-     (while (>! bucket :token)
-       (<! (timeout (int sleep-time)))))
+
+      ;; pause to adjust average rate if bucket is pre-filled
+      (when (> bucket-fill 0)
+        (<! (timeout (round (/ (* bucket-fill sleep-time) token-value)))))
+
+      (while (>! bucket :token)
+        (<! (timeout (int sleep-time)))))
 
     ;; The piping thread. Takes a token from the bucket (blocking until
     ;; one is ready if the bucket is empty), and forwards token-value
@@ -70,8 +78,12 @@
    chan-throttler."
 
   ([rate unit]
-     (chan-throttler rate unit 0))
+   (chan-throttler rate unit 0))
+
   ([rate unit bucket-size]
+   (chan-throttler rate unit bucket-size 0))
+
+  ([rate unit bucket-size bucket-fill]
      (when (nil? (unit->ms unit))
        (throw (IllegalArgumentException.
                (str "Invalid unit. Available units are: " (keys unit->ms)))))
@@ -82,8 +94,11 @@
      (when (or (not (integer? bucket-size)) (neg? bucket-size))
        (throw (IllegalArgumentException. "bucket-size should be a non-negative integer")))
 
+     (when (or (not (integer? bucket-fill)) (neg? bucket-fill))
+       (throw (IllegalArgumentException. "bucket-fill should be a non-negative integer")))
+
      (let [rate-ms (/ rate (unit->ms unit))]
-       (chan-throttler* rate-ms bucket-size))))
+       (chan-throttler* rate-ms bucket-size bucket-fill))))
 
 (defn throttle-chan
      "Takes a write channel, a goal rate and a unit and returns a read
@@ -113,7 +128,10 @@
      (throttle-chan c rate unit 0))
 
   ([c rate unit bucket-size]
-     ((chan-throttler rate unit bucket-size) c)))
+     (throttle-chan c rate unit bucket-size 0))
+
+  ([c rate unit bucket-size bucket-fill]
+     ((chan-throttler rate unit bucket-size bucket-fill) c)))
 
 (defn fn-throttler
 
@@ -152,8 +170,11 @@
      (fn-throttler rate unit 0))
 
   ([rate unit bucket-size]
+     (fn-throttler rate unit bucket-size 0))
+
+  ([rate unit bucket-size bucket-fill]
      (let [in (chan 1)
-           out (throttle-chan in rate unit bucket-size)]
+           out (throttle-chan in rate unit bucket-size bucket-fill)]
 
        ;; This function takes a function and produces a throttled
        ;; function. When called multiple times, all the resulting
@@ -183,4 +204,7 @@
      (throttle-fn f rate unit 0))
 
   ([f rate unit bucket-size]
-     ((fn-throttler rate unit bucket-size) f)))
+     (throttle-fn f rate unit bucket-size 0))
+
+  ([f rate unit bucket-size bucket-fill]
+     ((fn-throttler rate unit bucket-size bucket-fill) f)))
