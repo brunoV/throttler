@@ -5,8 +5,8 @@
             [throttler.bench :refer [rate]]))
 
 (facts "about throttle-fn"
-  (let [+?  (throttle-fn + 10       :second)
-        +?? (throttle-fn + 0.00001  :microsecond)] ; same, but expressed differently
+  (let [+?  (throttle-fn + 10 :second)
+        +?? (throttle-fn + (atom 0.00001) :microsecond)] ; same, but expressed differently
 
     (fact "It returns something"
       (throttle-fn + 1 :second) => truthy
@@ -40,3 +40,8 @@
    (fact "closing the input closes the output"
      (close! in)
      (<!! out) => nil)))
+
+(comment
+  (def rate-atom (atom 1))
+
+  (def f (throttle-fn #(println (java.util.Date.) rate-atom :second))))
