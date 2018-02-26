@@ -40,8 +40,3 @@
    (fact "closing the input closes the output"
      (close! in)
      (<!! out) => nil)))
-
-(comment
-  (def rate-atom (atom 1))
-
-  (def f (throttle-fn #(println (java.util.Date.) rate-atom :second))))

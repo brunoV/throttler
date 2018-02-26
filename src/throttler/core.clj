@@ -86,11 +86,11 @@
    (let [ref-rate (make-deref rate)]
      (when (nil? (unit->ms unit))
        (throw (IllegalArgumentException.
-               (str "Invalid unit. Available units are: " (keys unit->ms))))
+               (str "Invalid unit. Available units are: " (keys unit->ms)))))
 
-       (when-not (and (number? @ref-rate)
-                      (pos? @ref-rate))
-         (throw (IllegalArgumentException. "rate should be a positive number"))))
+     (when-not (and (number? @ref-rate)
+                    (pos? @ref-rate))
+       (throw (IllegalArgumentException. "rate should be a positive number")))
 
      (when (or (not (integer? bucket-size)) (neg? bucket-size))
        (throw (IllegalArgumentException. "bucket-size should be a non-negative integer")))
@@ -196,3 +196,15 @@
 
   ([f rate unit bucket-size]
    ((fn-throttler (make-deref rate) unit bucket-size) f)))
+
+(comment
+  (def rate-atom (atom 1))
+
+  (def f (throttle-fn #(println (java.util.Date.)) rate-atom :second))
+
+  (def fut
+    (future
+      (while true
+        (f))))
+
+  (reset! rate-atom 5))
