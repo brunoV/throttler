@@ -1,6 +1,5 @@
 (ns throttler.core
-  (:require [clojure.core.async :as async :refer [chan <!! >!! >! <! timeout go close! dropping-buffer]]
-            [clojure.pprint :refer [pprint]]))
+  (:require [clojure.core.async :as async :refer [<! <!! >! >!! chan close! dropping-buffer go timeout]]))
 
 ;; To keep the throttler precise even for high frequencies, we set up a
 ;; minimum sleep time. In my tests I found that below 10 ms the actual
@@ -15,6 +14,14 @@
    :hour 3600000 :day 86400000
    :month 2678400000})
 
+(defn- deref? [x]
+  (instance? clojure.lang.IDeref x))
+
+(defn make-deref [x]
+  (if (deref? x)
+    x
+    (delay x)))
+
 (defmacro pipe [from to]
   "Pipes an element from the from channel and supplies it to the to
   channel. The to channel will be closed when the from channel closes.
@@ -24,18 +31,22 @@
        (close! ~to)
        (>! ~to v#))))
 
-(defn- chan-throttler* [rate-ms bucket-size]
-  (let [sleep-time (round (max (/ rate-ms) min-sleep-time))
-        token-value (round (* sleep-time rate-ms))   ; how many messages to pipe per token
-        bucket (chan (dropping-buffer bucket-size))] ; we model the bucket with a buffered channel
+(defn ->rate-ms [rate unit]
+  (/ rate (unit->ms unit)))
+
+(defn- chan-throttler* [ref-rate unit bucket-size]
+  (let [rate-ms     #(->rate-ms @ref-rate unit)
+        sleep-time  #(round (max (/ (rate-ms)) min-sleep-time))
+        token-value #(round (* (sleep-time) (rate-ms))) ; how many messages to pipe per token
+        bucket      (chan (dropping-buffer bucket-size))] ; we model the bucket with a buffered channel
 
     ;; The bucket filler thread. Puts a token in the bucket every
     ;; sleep-time seconds. If the bucket is full the token is dropped
     ;; since the bucket channel uses a dropping buffer.
 
     (go
-     (while (>! bucket :token)
-       (<! (timeout (int sleep-time)))))
+      (while (>! bucket :token)
+        (<! (timeout (int (sleep-time))))))
 
     ;; The piping thread. Takes a token from the bucket (blocking until
     ;; one is ready if the bucket is empty), and forwards token-value
@@ -50,7 +61,7 @@
       (let [c' (chan)] ; the throttled chan
         (go
           (while (<! bucket) ; block for a token
-            (dotimes [_ token-value]
+            (dotimes [_ (token-value)]
               (when-not (pipe c c')
                 (close! bucket)))))
         c'))))
@@ -70,23 +81,24 @@
    chan-throttler."
 
   ([rate unit]
-     (chan-throttler rate unit 0))
+   (chan-throttler rate unit 0))
   ([rate unit bucket-size]
+   (let [ref-rate (make-deref rate)]
      (when (nil? (unit->ms unit))
        (throw (IllegalArgumentException.
                (str "Invalid unit. Available units are: " (keys unit->ms)))))
 
-     (when-not (and (number? rate) (pos? rate))
+     (when-not (and (number? @ref-rate)
+                    (pos? @ref-rate))
        (throw (IllegalArgumentException. "rate should be a positive number")))
 
      (when (or (not (integer? bucket-size)) (neg? bucket-size))
        (throw (IllegalArgumentException. "bucket-size should be a non-negative integer")))
 
-     (let [rate-ms (/ rate (unit->ms unit))]
-       (chan-throttler* rate-ms bucket-size))))
+     (chan-throttler* ref-rate unit bucket-size))))
 
 (defn throttle-chan
-     "Takes a write channel, a goal rate and a unit and returns a read
+  "Takes a write channel, a goal rate and a unit and returns a read
       channel. Messages written to the input channel can be read from
       the throttled output channel at a rate that will be at most the
       provided goal rate.
@@ -110,10 +122,10 @@
       closes."
 
   ([c rate unit]
-     (throttle-chan c rate unit 0))
+   (throttle-chan c rate unit 0))
 
   ([c rate unit bucket-size]
-     ((chan-throttler rate unit bucket-size) c)))
+   ((chan-throttler (make-deref rate) unit bucket-size) c)))
 
 (defn fn-throttler
 
@@ -149,11 +161,11 @@
    cap the allotted bandwidth."
 
   ([rate unit]
-     (fn-throttler rate unit 0))
+   (fn-throttler rate unit 0))
 
   ([rate unit bucket-size]
-     (let [in (chan 1)
-           out (throttle-chan in rate unit bucket-size)]
+   (let [in (chan 1)
+         out (throttle-chan in (make-deref rate) unit bucket-size)]
 
        ;; This function takes a function and produces a throttled
        ;; function. When called multiple times, all the resulting
@@ -161,14 +173,14 @@
        ;; resulting in a globally shared rate. I.e., the sum af the
        ;; rates of all functions will be at most the argument rate).
 
-       (fn [f]
-         (fn [& args]
+     (fn [f]
+       (fn [& args]
             ;; The approach is simple: pipe a bogus message through a
             ;; throttled channel before evaluating the original function.
 
-           (>!! in :eval-request)
-           (<!! out)
-           (apply f args))))))
+         (>!! in :eval-request)
+         (<!! out)
+         (apply f args))))))
 
 (defn throttle-fn
 
@@ -180,7 +192,19 @@
   will behave like a bursty channel. See throttle-chan for details."
 
   ([f rate unit]
-     (throttle-fn f rate unit 0))
+   (throttle-fn f rate unit 0))
 
   ([f rate unit bucket-size]
-     ((fn-throttler rate unit bucket-size) f)))
+   ((fn-throttler (make-deref rate) unit bucket-size) f)))
+
+(comment
+  (def rate-atom (atom 1))
+
+  (def f (throttle-fn #(println (java.util.Date.)) rate-atom :second))
+
+  (def fut
+    (future
+      (while true
+        (f))))
+
+  (reset! rate-atom 5))
