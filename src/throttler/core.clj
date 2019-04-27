@@ -1,6 +1,5 @@
 (ns throttler.core
-  (:require [clojure.core.async :as async :refer [chan <!! >!! >! <! timeout go close! dropping-buffer]]
-            [clojure.pprint :refer [pprint]]))
+  (:require [clojure.core.async :refer [chan <!! >!! >! <! timeout go close! dropping-buffer]]))
 
 ;; To keep the throttler precise even for high frequencies, we set up a
 ;; minimum sleep time. In my tests I found that below 10 ms the actual
@@ -15,10 +14,11 @@
    :hour 3600000 :day 86400000
    :month 2678400000})
 
-(defmacro pipe [from to]
+(defmacro pipe
   "Pipes an element from the from channel and supplies it to the to
   channel. The to channel will be closed when the from channel closes.
   Must be called within a go block."
+  [from to]
   `(let [v# (<! ~from)]
      (if (nil? v#)
        (close! ~to)
@@ -32,7 +32,6 @@
     ;; The bucket filler thread. Puts a token in the bucket every
     ;; sleep-time seconds. If the bucket is full the token is dropped
     ;; since the bucket channel uses a dropping buffer.
-
     (go
      (while (>! bucket :token)
        (<! (timeout (int sleep-time)))))
@@ -70,20 +69,20 @@
    chan-throttler."
 
   ([rate unit]
-     (chan-throttler rate unit 0))
+   (chan-throttler rate unit 1))
   ([rate unit bucket-size]
-     (when (nil? (unit->ms unit))
-       (throw (IllegalArgumentException.
-               (str "Invalid unit. Available units are: " (keys unit->ms)))))
+   (when (nil? (unit->ms unit))
+     (throw (IllegalArgumentException.
+             (str "Invalid unit. Available units are: " (keys unit->ms)))))
 
-     (when-not (and (number? rate) (pos? rate))
-       (throw (IllegalArgumentException. "rate should be a positive number")))
+   (when-not (and (number? rate) (pos? rate))
+     (throw (IllegalArgumentException. "rate should be a positive number")))
 
-     (when (or (not (integer? bucket-size)) (neg? bucket-size))
-       (throw (IllegalArgumentException. "bucket-size should be a non-negative integer")))
+   (when (or (not (integer? bucket-size)) (neg? bucket-size))
+     (throw (IllegalArgumentException. "bucket-size should be a non-negative integer")))
 
-     (let [rate-ms (/ rate (unit->ms unit))]
-       (chan-throttler* rate-ms bucket-size))))
+   (let [rate-ms (/ rate (unit->ms unit))]
+     (chan-throttler* rate-ms bucket-size))))
 
 (defn throttle-chan
      "Takes a write channel, a goal rate and a unit and returns a read
@@ -110,13 +109,12 @@
       closes."
 
   ([c rate unit]
-     (throttle-chan c rate unit 0))
+   (throttle-chan c rate unit 1))
 
   ([c rate unit bucket-size]
-     ((chan-throttler rate unit bucket-size) c)))
+   ((chan-throttler rate unit bucket-size) c)))
 
 (defn fn-throttler
-
   "Creates a function that will globally throttle multiple functions at
    the provided rate.  The returned function accepts a function and
    produces an equivalent one that complies with the desired rate. If
@@ -149,29 +147,27 @@
    cap the allotted bandwidth."
 
   ([rate unit]
-     (fn-throttler rate unit 0))
+   (fn-throttler rate unit 1))
 
   ([rate unit bucket-size]
-     (let [in (chan 1)
-           out (throttle-chan in rate unit bucket-size)]
+   (let [in (chan 1)
+         out (throttle-chan in rate unit bucket-size)]
 
-       ;; This function takes a function and produces a throttled
-       ;; function. When called multiple times, all the resulting
-       ;; throttled functions will share the same throttled channel,
-       ;; resulting in a globally shared rate. I.e., the sum af the
-       ;; rates of all functions will be at most the argument rate).
+     ;; This function takes a function and produces a throttled
+     ;; function. When called multiple times, all the resulting
+     ;; throttled functions will share the same throttled channel,
+     ;; resulting in a globally shared rate. I.e., the sum af the
+     ;; rates of all functions will be at most the argument rate).
 
-       (fn [f]
-         (fn [& args]
-            ;; The approach is simple: pipe a bogus message through a
-            ;; throttled channel before evaluating the original function.
-
-           (>!! in :eval-request)
-           (<!! out)
-           (apply f args))))))
+     (fn [f]
+       (fn [& args]
+          ;; The approach is simple: pipe a bogus message through a
+          ;; throttled channel before evaluating the original function.
+         (>!! in :eval-request)
+         (<!! out)
+         (apply f args))))))
 
 (defn throttle-fn
-
   "Takes a function, a goal rate and a time unit and returns a
   function that is equivalent to the original but that will have a maximum
   throughput of 'rate'.
@@ -180,7 +176,7 @@
   will behave like a bursty channel. See throttle-chan for details."
 
   ([f rate unit]
-     (throttle-fn f rate unit 0))
+   (throttle-fn f rate unit 1))
 
   ([f rate unit bucket-size]
-     ((fn-throttler rate unit bucket-size) f)))
+   ((fn-throttler rate unit bucket-size) f)))

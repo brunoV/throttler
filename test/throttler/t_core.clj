@@ -10,7 +10,7 @@
 
     (fact "It returns something"
       (throttle-fn + 1 :second) => truthy
-      (throttle-fn + 1 :second 9) => truthy)
+      (throttle-fn + 1 :second 9) => truthy
 
       (fact "It acts like the original function"
         (+? 1 1) => (+ 1 1)
@@ -27,7 +27,7 @@
         (throttle-fn + :foo :hour)      => (throws IllegalArgumentException)
         (throttle-fn +  0   :hour)      => (throws IllegalArgumentException)
         (throttle-fn +  1   :hour :foo) => (throws IllegalArgumentException)
-        (throttle-fn +  1   :hour -1)   => (throws IllegalArgumentException))))
+        (throttle-fn +  1   :hour -1)   => (throws IllegalArgumentException)))))
 
 (facts "about throttle-chan"
   (let [in (chan 1)
