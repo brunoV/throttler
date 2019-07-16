@@ -9,7 +9,8 @@ Some of its key features:
 
 * Control both average rate and burstiness.
 * Accurate over a large range of rates.
-* Lightweight. Based on [core.async][core-async], does not rely on
+* Lightweight. Based on
+  [java.util.concurrent.ScheduledExecutorService][scheduler] instead of relying on
   `Thread/sleep` so each throttler does not require a dedicated thread. Use as
   many as you want.
 * Throttle a single function/channel or a group under the same rate
@@ -148,7 +149,7 @@ Here's the result of running some [Criterium][crit] benchmarks on channels
 throttled at different rates.
 
 ```
-Goal rate              Observed rate (mean)  Lower quantile (2.5%)  Upper quantile (95.5%)
+Goal rate              Observed rate (mean)  Lower quantile (2.5%)  Upper quantile (97.5%)
 ---------------------  --------------------  ---------------------  ---------------------
       0.1  msg/s           0.1010 msgs/s          0.1008 msgs/s          0.1016 msgs/s
       1    msg/s           1.071  msgs/s          1.056  msgs/s          1.126  msgs/s
@@ -174,7 +175,7 @@ Browse the [API Docs][docs] or check out the [blog post][blog] for more.
 [token]:      http://en.wikipedia.org/wiki/Token_bucket
 [crit]:       https://github.com/hugoduncan/criterium
 [docs]:       https://brunov.github.io/throttler
-[core-async]: https://github.com/clojure/core.async
+[scheduler]:  https://docs.oracle.com/javase/7/docs/api/java/util/concurrent/ScheduledExecutorService.html
 [blog]:       http://brunov.org/clojure/2014/05/14/throttler/
 
 ## License
