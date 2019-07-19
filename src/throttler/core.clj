@@ -3,10 +3,8 @@
   (:import (java.util.concurrent Executors TimeUnit ScheduledExecutorService)))
 
 (def ^{:no-doc true} unit->ns
-  {:nanosecond 1 :microsecond 1.0E3 :millisecond 1.0E6
-   :second 1.0E9 :minute 6.0E10
-   :hour 3.6E12 :day 8.64E13
-   :month 2.6784E15})
+  {:nanosecond 1.0 :microsecond 1.0E3 :millisecond 1.0E6 :second 1.0E9
+   :minute 6.0E10 :hour 3.6E12 :day 8.64E13 :month 2.6784E15})
 
 (defmacro pipe
   "Pipes an element from the from channel and supplies it to the to
@@ -21,7 +19,9 @@
 (def scheduler (Executors/newSingleThreadScheduledExecutor))
 
 (defn- chan-throttler* [rate-ns bucket-size]
-  (let [sleep-time (Math/round (double (/ rate-ns)))
+  ; sleep-time is 1/(rate / unit-as-ns)
+  ; so for 140/second = 1/(140/1E9) = 7142857ns
+  (let [sleep-time (Math/round (/ 1.0 rate-ns))
         ; we model the bucket with a buffered channel
         bucket (chan (dropping-buffer bucket-size))
         ;; The bucket filler thread. Puts a token in the bucket every
@@ -70,6 +70,8 @@
      (throw (IllegalArgumentException. "bucket-size should be a non-negative integer")))
 
    (let [rate-ns (/ rate (unit->ns unit))]
+     (when (> rate-ns 1)
+       (throw (IllegalArgumentException. "cannot schedule rates faster than 1ns")))
      (chan-throttler* rate-ns bucket-size))))
 
 (defn throttle-chan
