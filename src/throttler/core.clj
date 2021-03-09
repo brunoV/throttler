@@ -33,8 +33,11 @@
     ;; sleep-time seconds. If the bucket is full the token is dropped
     ;; since the bucket channel uses a dropping buffer.
     (go
-     (while (>! bucket :token)
-       (<! (timeout (int sleep-time)))))
+      ;; Prefill the bucket to avoid lead times
+      (dotimes [_ bucket-size]
+        (>! bucket :token))
+      (while (>! bucket :token)
+        (<! (timeout (int sleep-time)))))
 
     ;; The piping thread. Takes a token from the bucket (blocking until
     ;; one is ready if the bucket is empty), and forwards token-value
