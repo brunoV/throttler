@@ -1,18 +1,10 @@
 (ns throttler.core
-  (:require [clojure.core.async :refer [chan <!! >!! >! <! timeout go close! dropping-buffer]]))
+  (:require [clojure.core.async :refer [chan <!! >!! >! <! go close! dropping-buffer]])
+  (:import (java.util.concurrent Executors TimeUnit ScheduledExecutorService)))
 
-;; To keep the throttler precise even for high frequencies, we set up a
-;; minimum sleep time. In my tests I found that below 10 ms the actual
-;; sleep time has an error of more than 10%, so we stay above that.
-(def ^{:no-doc true} min-sleep-time 10)
-
-(defn- round [n] (Math/round (double n)))
-
-(def ^{:no-doc true} unit->ms
-  {:microsecond 0.001 :millisecond 1
-   :second 1000 :minute 60000
-   :hour 3600000 :day 86400000
-   :month 2678400000})
+(def ^{:no-doc true} unit->ns
+  {:nanosecond 1.0 :microsecond 1.0E3 :millisecond 1.0E6 :second 1.0E9
+   :minute 6.0E10 :hour 3.6E12 :day 8.64E13 :month 2.6784E15})
 
 (defmacro pipe
   "Pipes an element from the from channel and supplies it to the to
@@ -24,34 +16,30 @@
        (close! ~to)
        (>! ~to v#))))
 
-(defn- chan-throttler* [rate-ms bucket-size]
-  (let [sleep-time (round (max (/ rate-ms) min-sleep-time))
-        token-value (round (* sleep-time rate-ms))   ; how many messages to pipe per token
-        bucket (chan (dropping-buffer bucket-size))] ; we model the bucket with a buffered channel
+(def scheduler (Executors/newSingleThreadScheduledExecutor))
 
-    ;; The bucket filler thread. Puts a token in the bucket every
-    ;; sleep-time seconds. If the bucket is full the token is dropped
-    ;; since the bucket channel uses a dropping buffer.
-    (go
-     (while (>! bucket :token)
-       (<! (timeout (int sleep-time)))))
+(defn- chan-throttler* [rate-ns bucket-size]
+  ; sleep-time is 1/(rate / unit-as-ns)
+  ; so for 140/second = 1/(140/1E9) = 7142857ns
+  (let [sleep-time (Math/round (/ 1.0 rate-ns))
+        ; we model the bucket with a buffered channel
+        bucket (chan (dropping-buffer bucket-size))
+        ;; The bucket filler thread. Puts a token in the bucket every
+        ;; sleep-time seconds. If the bucket is full the token is dropped
+        ;; since the bucket channel uses a dropping buffer.
+        task (.scheduleAtFixedRate ^ScheduledExecutorService scheduler
+               (fn [] (>!! bucket :token)) sleep-time sleep-time TimeUnit/NANOSECONDS)]
 
     ;; The piping thread. Takes a token from the bucket (blocking until
     ;; one is ready if the bucket is empty), and forwards token-value
     ;; messages from the source channel to the output channel.
-
-    ;; For high frequencies, we leave sleep-time fixed to
-    ;; min-sleep-time, and we increase token-value, the number of
-    ;; messages to pipe per token. For low frequencies, the token-value
-    ;; is 1 and we adjust sleep-time to obtain the desired rate.
-
     (fn [c]
       (let [c' (chan)] ; the throttled chan
         (go
           (while (<! bucket) ; block for a token
-            (dotimes [_ token-value]
-              (when-not (pipe c c')
-                (close! bucket)))))
+            (when-not (pipe c c')
+                (close! bucket)
+                (.cancel task true))))
         c'))))
 
 (defn chan-throttler
@@ -71,9 +59,9 @@
   ([rate unit]
    (chan-throttler rate unit 1))
   ([rate unit bucket-size]
-   (when (nil? (unit->ms unit))
+   (when (nil? (unit->ns unit))
      (throw (IllegalArgumentException.
-             (str "Invalid unit. Available units are: " (keys unit->ms)))))
+             (str "Invalid unit. Available units are: " (keys unit->ns)))))
 
    (when-not (and (number? rate) (pos? rate))
      (throw (IllegalArgumentException. "rate should be a positive number")))
@@ -81,8 +69,10 @@
    (when (or (not (integer? bucket-size)) (neg? bucket-size))
      (throw (IllegalArgumentException. "bucket-size should be a non-negative integer")))
 
-   (let [rate-ms (/ rate (unit->ms unit))]
-     (chan-throttler* rate-ms bucket-size))))
+   (let [rate-ns (/ rate (unit->ns unit))]
+     (when (> rate-ns 1)
+       (throw (IllegalArgumentException. "cannot schedule rates faster than 1ns")))
+     (chan-throttler* rate-ns bucket-size))))
 
 (defn throttle-chan
      "Takes a write channel, a goal rate and a unit and returns a read
