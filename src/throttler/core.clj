@@ -1,10 +1,13 @@
 (ns throttler.core
-  (:require [clojure.core.async :refer [chan <!! >!! >! <! timeout go close! dropping-buffer]]))
+  (:require [clojure.core.async :refer [chan <!! >!! >! <! alts!! timeout go close! dropping-buffer]]))
 
 ;; To keep the throttler precise even for high frequencies, we set up a
 ;; minimum sleep time. In my tests I found that below 10 ms the actual
 ;; sleep time has an error of more than 10%, so we stay above that.
 (def ^{:no-doc true} min-sleep-time 10)
+
+;; Timeout if the queue is stuck for more than 5 min
+(def max-queue-wait-timeout 300000)
 
 (defn- round [n] (Math/round (double n)))
 
@@ -166,8 +169,14 @@
        (fn [& args]
           ;; The approach is simple: pipe a bogus message through a
           ;; throttled channel before evaluating the original function.
-         (>!! in :eval-request)
-         (<!! out)
+         (let [[v _] (alts!! [[in :eval-request] (timeout max-queue-wait-timeout)])]
+            (when-not v
+              (throw (ex-info "Throttler in channel timed out after 5 min" 
+                              {:causes #{:out-in-timed-out}}))))
+         (let [[v _] (alts!! [out (timeout max-queue-wait-timeout)])]
+            (when-not v
+              (throw (ex-info "Throttler out channel timed out after 5 min" 
+                              {:causes #{:out-ch-timed-out}}))))
          (apply f args))))))
 
 (defn throttle-fn
